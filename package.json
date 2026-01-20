@@ -7,7 +7,9 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "jest",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "seed:if-needed": "node scripts/seed-if-needed.js",
+    "start:render": "npm run seed:if-needed && npm start"
   },
   "dependencies": {
     "express": "^4.18.2",
