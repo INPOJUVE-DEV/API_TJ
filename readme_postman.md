@@ -103,7 +103,7 @@ Elimina los refresh tokens asociados al usuario autenticado.
 
 ## 4. Autenticacion con OTP
 
-Usa este flujo para sesiones sin password (ideal para QA). El OTP se devuelve en la respuesta para facilitar la prueba manual.
+Usa este flujo para sesiones sin password (ideal para QA). El OTP solo se devuelve en la respuesta si `OTP_DEBUG=true`.
 
 ### 4.1 POST `{{baseUrl}}/auth/otp/send`
 
@@ -115,7 +115,7 @@ Usa este flujo para sesiones sin password (ideal para QA). El OTP se devuelve en
 }
 ```
 
-Con `{{otpCurp}} = HERL020101MBCNRZ01` la respuesta incluye:
+Con `{{otpCurp}} = HERL020101MBCNRZ01` y `OTP_DEBUG=true` la respuesta incluye:
 
 ```json
 {
@@ -124,7 +124,7 @@ Con `{{otpCurp}} = HERL020101MBCNRZ01` la respuesta incluye:
 }
 ```
 
-Guarda el codigo automaticamente:
+Guarda el codigo automaticamente (si viene en la respuesta):
 
 ```javascript
 const data = pm.response.json();
@@ -160,17 +160,21 @@ Agrega el mismo test que en login para llenar `{{token}}`.
 ### GET `{{baseUrl}}/me`
 
 - Header: `Authorization: Bearer {{token}}`
-- Respuesta cuando usaste a Ana:
+- Respuesta cuando usaste a Ana (telefono enmascarado si `EXPOSE_PII=false`):
 
 ```json
 {
   "id": 1,
   "nombre": "Ana",
   "apellidos": "Hernandez Ruiz",
-  "curp": "HERL020101MBCNRZ01",
+  "edad": 23,
+  "creditos": 0,
+  "barcodeValue": "TJ1-2B9D1C-202501",
   "email": "ana.hernandez@example.com",
   "municipio": "Tijuana",
-  "telefono": "6641234567"
+  "telefono": "***4567",
+  "fotoUrl": null,
+  "portadaUrl": null
 }
 ```
 
@@ -238,13 +242,15 @@ Parametros utiles:
 
 ```json
 {
-  "curp": "MELR000202MBCSRD06",
+  "curpMasked": "MELR***********06",
   "nombres": "Melissa",
   "apellidos": "Rios Delgado",
   "municipio": "Tecate",
   "hasAccount": false
 }
 ```
+
+Si `EXPOSE_PII=true`, la respuesta incluye `curp`.
 
 **Escenarios extra**
 
@@ -303,7 +309,8 @@ El frontend envia **multipart/form-data** con **solo campos de texto**; los docu
 ```json
 {
   "message": "Solicitud recibida",
-  "folio": "TJ-000123"
+  "folio": "TJ-000123",
+  "syncStatus": "success"
 }
 ```
 
@@ -317,7 +324,43 @@ Errores comunes:
 
 ---
 
-## 9. Buenas practicas
+## 9. QR y recompensas
+
+### POST `{{baseUrl}}/qr/scan`
+
+- Header: `Authorization: Bearer {{token}}`
+
+**Body**
+
+```json
+{
+  "barcodeValue": "TJ1-<token>-YYYYMM"
+}
+```
+
+**Respuesta 200 (cuando acredita)**
+
+```json
+{
+  "awarded": true,
+  "creditos": 2,
+  "delta": 1
+}
+```
+
+**Respuesta 200 (cuando ya se acredito hoy)**
+
+```json
+{
+  "awarded": false,
+  "creditos": 2,
+  "message": "El usuario ya registro un scan el dia de hoy."
+}
+```
+
+---
+
+## 10. Buenas practicas
 
 - Versiona tu coleccion y el archivo `readme_postman.md` junto al repositorio para que el equipo tenga los mismos datos de referencia.
 - Antes de cualquier sesion de prueba, ejecuta `npm run seed` para volver a un estado conocido.

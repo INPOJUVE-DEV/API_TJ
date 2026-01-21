@@ -128,20 +128,20 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 ### Autenticacion con OTP
 
-- `POST /auth/otp/send` genera un codigo de 6 digitos valido por 5 minutos y lo devuelve en la respuesta.
+- `POST /auth/otp/send` genera un codigo de 6 digitos valido por 5 minutos. Solo devuelve el OTP en la respuesta si `OTP_DEBUG=true`.
 - `POST /auth/otp/verify` valida `curp` + `otp` y emite tokens nuevos.
 
 ### Perfil de usuario
 
-- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve perfil + `barcodeValue` (formato `TJ1-<token>-YYYYMM`) y `creditos`; usa `EXPOSE_PII=true` si necesitas el telefono completo.
+- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve perfil + `barcodeValue` (formato `TJ1-<token>-YYYYMM`), `creditos`, `edad`, `fotoUrl`, `portadaUrl`. El `telefono` se enmascara salvo que `EXPOSE_PII=true`.
 
 ### QR y recompensas
 
-- `POST /qr/scan` (Bearer token, role `scanner` o `admin`) recibe `{ "barcodeValue": "TJ1-<token>-YYYYMM" }` y registra 1 credito diario por usuario. El token rota por mes.
+- `POST /qr/scan` (Bearer token, role `scanner` o `admin`) recibe `{ "barcodeValue": "TJ1-<token>-YYYYMM" }` y registra 1 credito diario por usuario. El token rota por mes. Responde `awarded`, `creditos` y `delta` cuando aplica.
 
 ### Catalogo de beneficios
 
-- `GET /catalog` (Bearer token, role `admin` o `reader`) admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, totalPages }`.
+- `GET /catalog` (Bearer token, role `admin` o `reader`) admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, page, pageSize, totalPages }`.
 - `GET /catalog/{id}` (Bearer token, role `admin` o `reader`) devuelve un beneficio por id.
 - `POST /catalog` (Bearer token, role `admin`) crea un beneficio. Campos: `nombre`, `descripcion`, `descuento`, `direccion`, `horario`, `lat`, `lng`, `categoriaId`/`categoria`, `municipioId`/`municipio`.
 - `PUT /catalog/{id}` (Bearer token, role `admin`) actualiza campos del beneficio.
@@ -149,13 +149,14 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 ### Vinculacion de tarjeta fisica
 
-- `POST /cardholders/lookup`: valida CURP, aplica rate limit (5 intentos en 15 minutos) y abre una ventana de 15 minutos para crear cuenta (`pending_account_until`).
+- `POST /cardholders/lookup`: valida CURP, aplica rate limit (5 intentos en 15 minutos) y abre una ventana de 15 minutos para crear cuenta (`pending_account_until`). Devuelve `curpMasked` y solo expone `curp` con `EXPOSE_PII=true`.
 - `POST /cardholders/{curp}/account`: crea un usuario usando los datos del cardholder si la ventana sigue vigente y el username cumple el regex (`^[A-Za-z0-9._-]{4,50}$`).
 
 ### Registro de ciudadanos sin tarjeta
 
 - `POST /register` (alias `POST /register/register`) recibe multipart/form-data con los campos personales. Los archivos `ine`, `comprobante` y `curpDoc` son ahora opcionales y no se requieren para crear la solicitud; si se envian, se siguen eliminando cuando ocurre un error de validacion.
 - Al crear la solicitud se envia (sincrono) el payload al endpoint central `POST /api/v1/beneficiarios/cache`. La respuesta esperada es solo conteos: `{ "total": 1, "inserted": 1, "rejected": 0 }`. El estatus del envio se guarda en `beneficiarios_sync_log` para inserciones manuales.
+- La respuesta incluye `syncStatus` con el estado del envio (`success`/`failed`/`queued` segun aplique).
 
 ## Probar el API con Postman
 
