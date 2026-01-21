@@ -3,6 +3,20 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 
+const NODE_ENV = String(process.env.NODE_ENV || '').toLowerCase();
+const ALLOW_PROD_SEED = String(process.env.ALLOW_PROD_SEED || '').toLowerCase() === 'true';
+
+function getSeedPassword(envKey, fallback) {
+  const envValue = process.env[envKey];
+  if (envValue) {
+    return envValue;
+  }
+  if (NODE_ENV === 'production' && ALLOW_PROD_SEED) {
+    throw new Error(`Falta configurar ${envKey} para el seed en produccion.`);
+  }
+  return fallback;
+}
+
 const MUNICIPIOS = ['Tijuana', 'Mexicali', 'Ensenada', 'Tecate'];
 const CATEGORIAS = ['Restaurantes', 'Salud', 'Tecnologia', 'Entretenimiento', 'Educacion'];
 
@@ -61,7 +75,8 @@ const USUARIOS = [
     email: 'ana.hernandez@example.com',
     telefono: '6641234567',
     municipio: 'Tijuana',
-    password: 'Test1234!'
+    password: getSeedPassword('SEED_ADMIN_PASSWORD', 'Test1234!'),
+    role: 'admin'
   },
   {
     nombre: 'Carlos',
@@ -70,7 +85,8 @@ const USUARIOS = [
     email: 'carlos.lopez@example.com',
     telefono: '6869876543',
     municipio: 'Mexicali',
-    password: 'Secret456!'
+    password: getSeedPassword('SEED_READER1_PASSWORD', 'Secret456!'),
+    role: 'reader'
   },
   {
     nombre: 'Maria',
@@ -79,7 +95,18 @@ const USUARIOS = [
     email: 'maria.soto@example.com',
     telefono: '6465551122',
     municipio: 'Ensenada',
-    password: 'Password789!'
+    password: getSeedPassword('SEED_READER2_PASSWORD', 'Password789!'),
+    role: 'reader'
+  },
+  {
+    nombre: 'Scanner',
+    apellidos: 'Operador',
+    curp: 'SCAN010101HBCNPR01',
+    email: 'scanner@tj.local',
+    telefono: null,
+    municipio: 'Tijuana',
+    password: getSeedPassword('SEED_SCANNER_PASSWORD', 'Scan1234!'),
+    role: 'scanner'
   }
 ];
 
@@ -132,7 +159,7 @@ const SOLICITUDES = [
     calle: 'Av. Hidalgo',
     numero: '1204',
     cp: '22000',
-    password: 'Temporal123!',
+    password: getSeedPassword('SEED_SOLICITUD_1_PASSWORD', 'Temporal123!'),
     status: 'pending',
     aceptaTerminos: true,
     docIne: 'fernanda-ine.pdf',
@@ -150,7 +177,7 @@ const SOLICITUDES = [
     calle: 'Calle 10',
     numero: '543B',
     cp: '21010',
-    password: 'Temporal456!',
+    password: getSeedPassword('SEED_SOLICITUD_2_PASSWORD', 'Temporal456!'),
     status: 'approved',
     aceptaTerminos: true,
     docIne: 'luis-ine.png',
@@ -207,6 +234,10 @@ async function ensureSchema(pool) {
       telefono VARCHAR(20),
       municipio_id INT,
       password_hash VARCHAR(255) NOT NULL,
+      role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader',
+      creditos INT NOT NULL DEFAULT 0,
+      foto_url VARCHAR(255),
+      portada_url VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (municipio_id) REFERENCES municipios(id)
         ON UPDATE CASCADE
@@ -287,6 +318,22 @@ async function ensureSchema(pool) {
         ON UPDATE CASCADE
         ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS beneficiarios_sync_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      solicitud_id INT,
+      curp VARCHAR(20) NOT NULL,
+      payload JSON NOT NULL,
+      status ENUM('sent','failed','rejected','skipped') NOT NULL,
+      response_status INT,
+      total_count INT,
+      inserted_count INT,
+      rejected_count INT,
+      error_message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (solicitud_id) REFERENCES solicitudes_registro(id)
+        ON DELETE SET NULL,
+      INDEX idx_beneficiarios_sync_curp (curp)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS refresh_tokens (
       id INT AUTO_INCREMENT PRIMARY KEY,
       usuario_id INT NOT NULL,
@@ -303,6 +350,46 @@ async function ensureSchema(pool) {
       expiry_date DATETIME NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_otp_codes_curp (curp)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS user_qr_tokens (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      token_value VARCHAR(64) NOT NULL,
+      token_hash CHAR(64) NOT NULL,
+      status ENUM('active','rotated','revoked') NOT NULL DEFAULT 'active',
+      valid_from DATE NOT NULL,
+      valid_until DATE NOT NULL,
+      last_used_at DATETIME NULL,
+      revoked_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_user_qr_token_hash (token_hash),
+      UNIQUE KEY uq_user_qr_token_month (user_id, valid_from),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS coin_daily_awards (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      award_date DATE NOT NULL,
+      scanner_id INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_coin_daily_user (user_id, award_date),
+      FOREIGN KEY (user_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE,
+      FOREIGN KEY (scanner_id) REFERENCES usuarios(id)
+        ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS coin_transactions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      delta INT NOT NULL,
+      type ENUM('scan_reward') NOT NULL,
+      scanner_id INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE,
+      FOREIGN KEY (scanner_id) REFERENCES usuarios(id)
+        ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
@@ -311,6 +398,8 @@ async function ensureSchema(pool) {
   }
 
   const [[{ dbName }]] = await pool.query('SELECT DATABASE() AS dbName');
+  await ensureUsuariosColumns(pool, dbName);
+  await ensureUsuariosRoleEnum(pool, dbName);
   await ensureSolicitudesColumns(pool, dbName);
 }
 
@@ -334,6 +423,38 @@ async function ensureSolicitudesColumns(pool, dbName) {
   await ensureColumn(pool, dbName, 'solicitudes_registro', 'cp', 'CHAR(5) DEFAULT NULL AFTER numero');
   await ensureColumn(pool, dbName, 'solicitudes_registro', 'acepta_terminos', 'TINYINT(1) DEFAULT 0 AFTER status');
   await ensureColumn(pool, dbName, 'solicitudes_registro', 'folio', 'VARCHAR(20) DEFAULT NULL AFTER doc_curp');
+}
+
+async function ensureUsuariosColumns(pool, dbName) {
+  await ensureColumn(
+    pool,
+    dbName,
+    'usuarios',
+    'role',
+    "ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader'"
+  );
+  await ensureColumn(pool, dbName, 'usuarios', 'creditos', 'INT NOT NULL DEFAULT 0');
+  await ensureColumn(pool, dbName, 'usuarios', 'foto_url', 'VARCHAR(255) NULL');
+  await ensureColumn(pool, dbName, 'usuarios', 'portada_url', 'VARCHAR(255) NULL');
+}
+
+async function ensureUsuariosRoleEnum(pool, dbName) {
+  const [rows] = await pool.execute(
+    `SELECT COLUMN_TYPE
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'role'
+     LIMIT 1`,
+    [dbName]
+  );
+  if (rows.length === 0) {
+    return;
+  }
+  const columnType = String(rows[0].COLUMN_TYPE || '');
+  if (!columnType.includes('scanner')) {
+    await pool.execute(
+      "ALTER TABLE usuarios MODIFY COLUMN role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader'"
+    );
+  }
 }
 
 async function seedMunicipios(pool) {
@@ -436,14 +557,15 @@ async function seedUsuarios(pool, municipioMap) {
     const municipioId = municipioMap[usuario.municipio] || null;
     await pool.execute(
       `INSERT INTO usuarios
-        (nombre, apellidos, curp, email, telefono, municipio_id, password_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+        (nombre, apellidos, curp, email, telefono, municipio_id, password_hash, role)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         nombre = VALUES(nombre),
         apellidos = VALUES(apellidos),
         telefono = VALUES(telefono),
         municipio_id = VALUES(municipio_id),
-        password_hash = VALUES(password_hash)`,
+        password_hash = VALUES(password_hash),
+        role = VALUES(role)`,
       [
         usuario.nombre,
         usuario.apellidos,
@@ -451,7 +573,8 @@ async function seedUsuarios(pool, municipioMap) {
         usuario.email,
         usuario.telefono,
         municipioId,
-        passwordHash
+        passwordHash,
+        usuario.role || 'reader'
       ]
     );
   }
@@ -536,6 +659,11 @@ async function seedSolicitudes(pool, municipioMap) {
 }
 
 async function main() {
+  if (NODE_ENV === 'production' && !ALLOW_PROD_SEED) {
+    throw new Error(
+      'Seed deshabilitado en produccion. Define ALLOW_PROD_SEED=true para forzarlo.'
+    );
+  }
   const pool = mysql.createPool(getDbConfig());
   console.log('Iniciando seed de datos...');
   try {
@@ -572,4 +700,8 @@ async function main() {
   }
 }
 
-main();
+module.exports = { ensureSchema, getDbConfig };
+
+if (require.main === module) {
+  main();
+}

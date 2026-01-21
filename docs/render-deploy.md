@@ -59,7 +59,7 @@ Notas:
 Notas:
 - Render inyecta `PORT` automaticamente; el server ya escucha `process.env.PORT`.
 - Verificacion rapida: `GET /health` responde `200 { ok: true }`.
-- `start:render` ejecuta el seed solo si la BD esta vacia.
+- `start:render` ejecuta el seed solo si la BD esta vacia y `SEED_ON_START` lo permite (en produccion el default es `false`).
 
 ## 5) Variables de entorno (Environment)
 
@@ -69,7 +69,9 @@ Configura estas variables en Render (Dashboard -> Service -> Environment):
 - `JWT_SECRET` (obligatoria).
 - `JWT_EXPIRATION` (opcional, ejemplo `15m`).
 - `FRONTEND_ORIGIN` (opcional, para CORS).
-- `SEED_ON_START` (opcional, default true). Usa `false` para no ejecutar el seed automatico.
+- `SEED_ON_START` (opcional, default `false` en produccion). Usa `true` para habilitar el seed automatico.
+- `ALLOW_PROD_SEED` (opcional, default `false`). Requiere `true` para ejecutar `scripts/seed.js` en produccion.
+- `SEED_*_PASSWORD` (opcional). Passwords para los usuarios/solicitudes del seed.
 
 Uploads (si usas adjuntos en `/register`):
 
@@ -95,8 +97,8 @@ Ejemplo con Render Disk:
 ## 7) Ejecutar el seed contra MySQL
 
 El seed crea/actualiza el esquema y carga datos de prueba.
-Si usas `start:render`, el seed se ejecuta automaticamente solo cuando no hay datos.
-Puedes deshabilitarlo con `SEED_ON_START=false`.
+Si usas `start:render`, el seed se ejecuta automaticamente solo cuando no hay datos y `SEED_ON_START=true`.
+En produccion tambien necesitas `ALLOW_PROD_SEED=true` y definir `SEED_*_PASSWORD`.
 
 Manual (opcional):
 

@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const fs = require('fs/promises');
 const db = require('../config/db');
 const { ensureUploadsDir } = require('../config/uploads');
+const { syncBeneficiario, saveSyncLog } = require('../services/beneficiariosCache');
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'application/pdf']);
@@ -14,6 +15,7 @@ const CP_REGEX = /^\d{5}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 const SALT_ROUNDS = 10;
+const CACHE_SOURCE = process.env.BENEFICIARIOS_CACHE_SOURCE || 'api-externa';
 
 const UPLOADS_DIR = ensureUploadsDir();
 
@@ -331,7 +333,53 @@ exports.register = async (req, res) => {
     const folio = formatFolio(solicitudId);
     await db.execute('UPDATE solicitudes_registro SET folio = ? WHERE id = ?', [folio, solicitudId]);
 
-    return res.status(201).json({ message: 'Solicitud recibida', folio });
+    let syncStatus = 'failed';
+    try {
+      const municipioId = body.municipioId ?? body.municipio_id ?? null;
+      const { payload, result: syncResult } = await syncBeneficiario({
+        folioTarjeta: folio,
+        nombres,
+        apellidos,
+        curp: rawCurp,
+        fechaNacimiento: fechaISO,
+        discapacidad: body.discapacidad,
+        idIne: body.id_ine ?? body.idIne ?? null,
+        telefono: body.telefono ?? null,
+        calle,
+        numeroExt: numero,
+        numeroInt: body.numeroInt ?? body.numero_int ?? null,
+        colonia,
+        municipioId,
+        codigoPostal: cp,
+        seccional: body.seccional ?? null
+      });
+      await saveSyncLog({
+        solicitudId,
+        curp: rawCurp,
+        payload,
+        result: syncResult
+      });
+      syncStatus = syncResult?.status || 'failed';
+    } catch (syncError) {
+      console.error('Error al sincronizar beneficiario', syncError);
+      try {
+        await saveSyncLog({
+          solicitudId,
+          curp: rawCurp,
+          payload: { source: CACHE_SOURCE, beneficiarios: [] },
+          result: {
+            status: 'failed',
+            responseStatus: null,
+            counts: { total: null, inserted: null, rejected: null },
+            errorMessage: syncError?.message || 'Error al sincronizar beneficiario'
+          }
+        });
+      } catch (logError) {
+        console.error('Error al guardar sync log', logError);
+      }
+    }
+
+    return res.status(201).json({ message: 'Solicitud recibida', folio, syncStatus });
   } catch (err) {
     console.error(err);
     await cleanupUploadedFiles(req.files);

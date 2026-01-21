@@ -1,8 +1,14 @@
-﻿const request = require('supertest');
+const request = require('supertest');
+const jwt = require('jsonwebtoken');
+
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 // Mockear la capa de base de datos para no depender de MySQL en las pruebas
 jest.mock('../src/config/db', () => {
   const mockExecute = jest.fn().mockImplementation(async (sql) => {
+    if (typeof sql === 'string' && sql.includes('SELECT role FROM usuarios')) {
+      return [[{ role: 'reader' }], []];
+    }
     if (typeof sql === 'string' && sql.includes('COUNT(*)')) {
       return [[{ total: 0 }], []];
     }
@@ -24,6 +30,8 @@ jest.mock('../src/config/db', () => {
 const app = require('../src/index');
 
 describe('Pruebas de API', () => {
+  const token = jwt.sign({ id: 1 }, process.env.JWT_SECRET);
+
   test('GET /health responde con 200 { ok: true }', async () => {
     const res = await request(app).get('/health');
     expect(res.statusCode).toBe(200);
@@ -31,7 +39,9 @@ describe('Pruebas de API', () => {
   });
 
   test('GET /api/v1/catalog responde con 200 y estructura de lista', async () => {
-    const res = await request(app).get('/api/v1/catalog');
+    const res = await request(app)
+      .get('/api/v1/catalog')
+      .set('Authorization', `Bearer ${token}`);
     expect(res.statusCode).toBe(200);
     expect(res.body).toHaveProperty('items');
   });

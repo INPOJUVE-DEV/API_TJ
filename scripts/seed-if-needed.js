@@ -30,10 +30,10 @@ function getDbConfig() {
 
 function isSeedEnabled() {
   const raw = (process.env.SEED_ON_START || '').trim().toLowerCase();
-  if (!raw) {
-    return true;
+  if (raw) {
+    return !['0', 'false', 'no', 'off'].includes(raw);
   }
-  return !['0', 'false', 'no', 'off'].includes(raw);
+  return String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
 }
 
 async function shouldSeed(pool) {

@@ -1,5 +1,10 @@
 ﻿const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET es obligatorio');
+}
+
 // Middleware para verificar el token JWT
 // Almacena el id del usuario autenticado en req.user (p.ej. { id: 1 })
 module.exports = function verifyToken(req, res, next) {
@@ -13,7 +18,7 @@ module.exports = function verifyToken(req, res, next) {
   }
   const token = parts[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = { id: decoded.id };
     next();
   } catch (err) {

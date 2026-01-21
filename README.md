@@ -5,7 +5,7 @@ API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion
 ## Caracteristicas clave
 
 - Autenticacion basada en JWT con refresh tokens persistidos en `refresh_tokens`.
-- Flujo OTP autodocumentado para QA local (el codigo se devuelve en la respuesta) y auditoria en `cardholder_audit_logs`.
+- Flujo OTP autodocumentado controlado por `OTP_DEBUG` (solo devuelve el codigo cuando esta activo) y auditoria en `cardholder_audit_logs`.
 - Registro multipart/form-data con validaciones reforzadas de CURP (incluyendo consistencia con la fecha de nacimiento y limite de edad de 29 años cumplidos al momento del tramite), direccion y campos personales. Los documentos adjuntos ya no son obligatorios.
 - Catalogo de beneficios filtrable por municipio, categoria y texto libre.
 - Script de seed que crea el esquema completo y datos de prueba consistentes.
@@ -43,7 +43,20 @@ API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion
 | `DB_URI` | Alternativa para definir la conexion en una sola cadena. | `mysql://user:pass@host:3306/tarjeta_joven` |
 | `JWT_SECRET` | Clave para firmar tokens. | Cadena aleatoria y larga. |
 | `JWT_EXPIRATION` | Tiempo de vida del access token. | `15m` (o lo que prefieras). |
+| `OTP_DEBUG` | Devuelve el OTP en la respuesta (solo para QA). | `false` |
+| `EXPOSE_PII` | Devuelve CURP/telefono completos en respuestas. | `false` |
+| `QR_TOKEN_BYTES` | Longitud en bytes del token QR. | `16` |
+| `QR_PREFIX` | Prefijo del QR para el beneficiario. | `TJ1` |
+| `COIN_REWARD_PER_SCAN` | Creditos otorgados por scan diario. | `1` |
 | `UPLOADS_DIR` | Directorio donde se guardan los archivos subidos (multer). | `uploads/` |
+| `BENEFICIARIOS_CACHE_URL` | Endpoint central para cachear beneficiarios. | `https://central/api/v1/beneficiarios/cache` |
+| `BENEFICIARIOS_CACHE_JWT_SECRET` | Secreto JWT para autenticar el envio. | Cadena aleatoria y larga. |
+| `BENEFICIARIOS_CACHE_JWT_TTL` | Expiracion del JWT de envio. | `365d` o `none`. |
+| `BENEFICIARIOS_CACHE_SOURCE` | Valor fijo de `source` en el payload. | `api-externa` |
+| `BENEFICIARIOS_CACHE_TIMEOUT_MS` | Timeout en milisegundos para el envio. | `8000` |
+| `SEED_ON_START` | Controla el seed automatico en `start:render`. | `true` en desarrollo; `false` en produccion. |
+| `ALLOW_PROD_SEED` | Permite ejecutar `scripts/seed.js` en produccion. | `false` |
+| `SEED_*_PASSWORD` | Passwords para usuarios/solicitudes del seed. | Solo si necesitas override. |
 
 ## Ejecucion local (sin Docker)
 
@@ -74,7 +87,7 @@ Necesitas un servidor MySQL accesible y las variables del `.env` apuntando a dic
 
 ## Base de datos y datos de ejemplo
 
-`scripts/seed.js` crea todas las tablas (`usuarios`, `cardholders`, `solicitudes_registro`, `beneficios`, `otp_codes`, etc.) y carga catalogos + casos de prueba.
+`scripts/seed.js` crea todas las tablas (`usuarios`, `cardholders`, `solicitudes_registro`, `beneficios`, `otp_codes`, etc.) y carga catalogos + casos de prueba. En produccion esta deshabilitado por defecto; para forzarlo define `ALLOW_PROD_SEED=true` y configura los `SEED_*_PASSWORD`.
 
 ```bash
 npm run seed
@@ -82,7 +95,7 @@ npm run seed
 docker compose exec api node scripts/seed.js
 ```
 
-El script es idempotente y usa las credenciales del `.env`. Cuentas y recursos precargados:
+El script es idempotente y usa las credenciales del `.env`. En desarrollo usa passwords por defecto; en produccion debes definir `SEED_*_PASSWORD`. Cuentas y recursos precargados:
 
 | Alias | Email | CURP | Password | Municipio | Telefono |
 |-------|-------|------|----------|-----------|----------|
@@ -120,11 +133,19 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 ### Perfil de usuario
 
-- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve nombre, apellidos, CURP, email, municipio y telefono.
+- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve perfil + `barcodeValue` (formato `TJ1-<token>-YYYYMM`) y `creditos`; usa `EXPOSE_PII=true` si necesitas el telefono completo.
+
+### QR y recompensas
+
+- `POST /qr/scan` (Bearer token, role `scanner` o `admin`) recibe `{ "barcodeValue": "TJ1-<token>-YYYYMM" }` y registra 1 credito diario por usuario. El token rota por mes.
 
 ### Catalogo de beneficios
 
-- `GET /catalog` admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, totalPages }`.
+- `GET /catalog` (Bearer token, role `admin` o `reader`) admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, totalPages }`.
+- `GET /catalog/{id}` (Bearer token, role `admin` o `reader`) devuelve un beneficio por id.
+- `POST /catalog` (Bearer token, role `admin`) crea un beneficio. Campos: `nombre`, `descripcion`, `descuento`, `direccion`, `horario`, `lat`, `lng`, `categoriaId`/`categoria`, `municipioId`/`municipio`.
+- `PUT /catalog/{id}` (Bearer token, role `admin`) actualiza campos del beneficio.
+- `DELETE /catalog/{id}` (Bearer token, role `admin`) elimina un beneficio.
 
 ### Vinculacion de tarjeta fisica
 
@@ -134,6 +155,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 ### Registro de ciudadanos sin tarjeta
 
 - `POST /register` (alias `POST /register/register`) recibe multipart/form-data con los campos personales. Los archivos `ine`, `comprobante` y `curpDoc` son ahora opcionales y no se requieren para crear la solicitud; si se envian, se siguen eliminando cuando ocurre un error de validacion.
+- Al crear la solicitud se envia (sincrono) el payload al endpoint central `POST /api/v1/beneficiarios/cache`. La respuesta esperada es solo conteos: `{ "total": 1, "inserted": 1, "rejected": 0 }`. El estatus del envio se guarda en `beneficiarios_sync_log` para inserciones manuales.
 
 ## Probar el API con Postman
 
@@ -145,6 +167,7 @@ Consulta `readme_postman.md` para la guia paso a paso: configuracion de entorno,
 - `npm start`: arranque en modo produccion (el comando usado por el contenedor `api`).
 - `npm test`: ejecuta Jest con la base mockeada.
 - `npm run seed`: crea/actualiza las tablas minimas y datos de ejemplo.
+- `npm run db:ensure`: verifica y actualiza el esquema sin insertar datos.
 
 ## Endpoints principales
 
@@ -155,7 +178,12 @@ Todos los endpoints estan versionados bajo `/api/v1`:
 - `POST /auth/otp/send`
 - `POST /auth/otp/verify`
 - `GET /me`
+- `POST /qr/scan`
 - `GET /catalog`
+- `GET /catalog/{id}`
+- `POST /catalog`
+- `PUT /catalog/{id}`
+- `DELETE /catalog/{id}`
 - `POST /register`
 - `POST /cardholders/lookup`
 - `POST /cardholders/{curp}/account`

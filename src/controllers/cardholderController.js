@@ -8,9 +8,23 @@ const LOOKUP_RATE_WINDOW_MINUTES = 15;
 const LOOKUP_BLOCK_MINUTES = 15;
 const ACCOUNT_WINDOW_MINUTES = 15;
 const SALT_ROUNDS = 10;
+const EXPOSE_PII = String(process.env.EXPOSE_PII || '').toLowerCase() === 'true';
 
 function normalizeCurp(curp = '') {
   return curp.trim().toUpperCase();
+}
+
+function maskCurp(curp) {
+  if (!curp) {
+    return null;
+  }
+  const value = String(curp);
+  if (value.length <= 6) {
+    return '*'.repeat(value.length);
+  }
+  const prefix = value.slice(0, 4);
+  const suffix = value.slice(-2);
+  return `${prefix}${'*'.repeat(value.length - 6)}${suffix}`;
 }
 
 function minutesToMs(minutes) {
@@ -111,13 +125,17 @@ exports.lookup = async (req, res) => {
 
     await logAudit(cardholder.id, 'lookup', req);
 
-    return res.json({
-      curp: cardholder.curp,
+    const response = {
+      curpMasked: maskCurp(cardholder.curp),
       nombres: cardholder.nombres,
       apellidos: cardholder.apellidos,
       municipio: cardholder.municipio,
       hasAccount: false
-    });
+    };
+    if (EXPOSE_PII) {
+      response.curp = cardholder.curp;
+    }
+    return res.json(response);
   } catch (error) {
     console.error('Error en lookup de cardholder', error);
     return res.status(500).json({ message: 'Error al validar la tarjeta.' });
@@ -206,15 +224,16 @@ exports.createAccount = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const [insertResult] = await connection.execute(
       `INSERT INTO usuarios
-        (nombre, apellidos, curp, email, telefono, municipio_id, password_hash)
-       VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+        (nombre, apellidos, curp, email, telefono, municipio_id, password_hash, role)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
       [
         cardholder.nombres,
         cardholder.apellidos,
         cardholder.curp,
         username,
         cardholder.municipio_id || null,
-        passwordHash
+        passwordHash,
+        'reader'
       ]
     );
 
