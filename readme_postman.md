@@ -1,69 +1,41 @@
 # Guia de pruebas API con Postman
 
-Esta guia documenta como validar los endpoints principales del Backend Tarjeta Joven usando Postman. Todos los ejemplos usan los datos generados por `scripts/seed.js`, por lo que puedes reconstruirlos corriendo `npm run seed` (o `docker compose exec api node scripts/seed.js`).
+Esta guia cubre los flujos principales despues de la actualizacion: autenticacion interna, padron sincronizado, lookup por integracion, staging cifrado, push manual y activacion con Auth0.
 
-## 1. Entorno recomendado en Postman
+## Archivos listos para importar
+
+- Coleccion: [API_TJ_local.postman_collection.json](scripts/fixtures/API_TJ_local.postman_collection.json)
+- Environment: [API_TJ_local.postman_environment.json](scripts/fixtures/API_TJ_local.postman_environment.json)
+
+Para regenerarlos en local:
+
+```bash
+npm run setup:postman-local
+npm run export:postman-env
+npm run build:postman-collection
+```
+
+Si vas a usar la coleccion con JWT RS256 dinamico y Auth0 mock, levanta tambien:
+
+```bash
+npm run mock:externals
+```
+
+La coleccion usa `mock_base_url` para pedir un JWT nuevo por request de integracion, porque `jti` es anti-replay y no debe reutilizarse.
+
+## 1. Entorno recomendado
 
 | Variable | Valor inicial | Descripcion |
 |----------|---------------|-------------|
-| `{{baseUrl}}` | `http://localhost:8080/api/v1` | URL base expuesta por el backend (ajusta el puerto si usas otro). |
-| `{{token}}` | *(vacio)* | Se llena automaticamente tras el login u OTP para reutilizar el Bearer Token. |
-| `{{refreshToken}}` | *(vacio)* | Opcional: guarda el valor devuelto por login/OTP. |
-| `{{otpCurp}}` | `HERL020101MBCNRZ01` | CURP del usuario a quien se enviara el OTP en pruebas rapidas. |
-| `{{otpCode}}` | *(vacio)* | Variable temporal para almacenar el codigo OTP. |
+| `baseUrl` | `http://localhost:8080/api/v1` | URL base del API. |
+| `token` | vacio | JWT local obtenido por login. |
+| `integrationToken` | vacio | JWT RS256 firmado por `sys_ipj` o `unidad_informatica`. |
+| `auth0IdToken` | vacio | ID token real emitido por Auth0 para completar activacion. |
+| `stagingId` | vacio | ID devuelto al crear staging. |
 
-> Sugerencia: crea un folder en tu coleccion con los scripts de tests indicados en cada seccion para que las variables se actualicen automaticamente.
+## 2. Login interno
 
-## 2. Datos de prueba precargados
-
-### 2.1 Usuarios con credenciales listas
-
-| Alias | Usuario (email) | Login alternativo (CURP) | Password | Municipio | Telefono |
-|-------|-----------------|--------------------------|----------|-----------|----------|
-| Ana | `ana.hernandez@example.com` | `HERL020101MBCNRZ01` | `Test1234!` | Tijuana | 6641234567 |
-| Carlos | `carlos.lopez@example.com` | `LOMC990505HBCLPM02` | `Secret456!` | Mexicali | 6869876543 |
-| Maria | `maria.soto@example.com` | `SOAM010910MBCSGR03` | `Password789!` | Ensenada | 6465551122 |
-
-### 2.2 Tarjetahabientes cargados
-
-| CURP | Nombre | Municipio | Estado | Notas |
-|------|--------|-----------|--------|-------|
-| `HERL020101MBCNRZ01` | Ana Hernandez Ruiz | Tijuana | active | Ya tiene cuenta asociada (ideal para login y OTP). |
-| `LOMC990505HBCLPM02` | Carlos Lopez Mendez | Mexicali | active | Cuenta vinculada; usar para login tradicional. |
-| `MELR000202MBCSRD06` | Melissa Rios Delgado | Tecate | active | **Sin cuenta.** Usar para el flujo lookup + account. |
-| `SAQP950101HBCQRP07` | Santiago Quintero Perez | Tijuana | inactive | Responde `404` en lookup. |
-
-### 2.3 Beneficios disponibles
-
-| Nombre | Categoria | Municipio | Descuento |
-|--------|-----------|-----------|-----------|
-| Cafe Frontera | Restaurantes | Tijuana | 20% en consumo presentando la tarjeta. |
-| Gimnasio Vitalia | Salud | Mexicali | Inscripcion gratis + 15% mensualidad. |
-| Cine Pacifico | Entretenimiento | Ensenada | 2x1 en taquilla martes y jueves. |
-| Coding Lab BC | Tecnologia | Tijuana | Beca del 30% en cursos intensivos. |
-
-### 2.4 Solicitudes de registro existentes
-
-| CURP | Nombre | Municipio | Estado de solicitud |
-|------|--------|-----------|---------------------|
-| `SAQF030415MBCSLQ04` | Fernanda Salas Quiroz | Tijuana | pending |
-| `CATL021102HBCCMT05` | Luis Camacho Torres | Mexicali | approved |
-
-> Tip: evita reutilizar estos CURP cuando pruebes `/register` para no obtener `409 Conflict`. Cambia algunos caracteres finales o genera un CURP temporal para cada prueba.
-
----
-
-## 3. Autenticacion con usuario y password
-
-### 3.1 POST `{{baseUrl}}/auth/login`
-
-Obtiene un `accessToken` (15 minutos por defecto) y un `refreshToken` valido por 7 dias. El backend acepta email o CURP en `username`.
-
-**Headers**
-
-- `Content-Type: application/json`
-
-**Body (raw / JSON)**
+### POST `{{baseUrl}}/auth/login`
 
 ```json
 {
@@ -72,298 +44,302 @@ Obtiene un `accessToken` (15 minutos por defecto) y un `refreshToken` valido por
 }
 ```
 
-Tambien puedes usar `LOMC990505HBCLPM02` con `Secret456!`.
-
-**Tests recomendados en Postman**
+Test sugerido:
 
 ```javascript
 pm.test("Login 200", () => pm.response.to.have.status(200));
 const data = pm.response.json();
 pm.environment.set("token", data.accessToken);
-pm.environment.set("refreshToken", data.refreshToken);
 ```
 
-**Respuesta 200 (ejemplo)**
+El login interno acepta email y password. El login por CURP y el OTP por CURP quedaron retirados de los flujos activos.
+
+## 3. JWT RS256 de integracion
+
+Los endpoints de integracion requieren:
+
+- Header `Authorization: Bearer {{integrationToken}}`
+- Algoritmo `RS256`
+- Header JWT con `kid`
+- Claims `iss`, `sub`, `aud`, `iat`, `exp`, `jti`, `scope`
+
+Reglas:
+
+- `iss` debe ser `sys_ipj` o `unidad_informatica`.
+- `aud` debe coincidir con `INTEGRATION_JWT_AUDIENCE` (`api_tj` por default).
+- `kid` debe existir en `service_client_keys`.
+- `jti` no se puede reutilizar.
+- Las llamadas autorizadas quedan auditadas sin request body ni CURP completa.
+- El rate limit se aplica por cliente integrador y ruta.
+
+Scopes:
+
+| Cliente | Scopes |
+|---------|--------|
+| `sys_ipj` | `cardholders.sync` |
+| `unidad_informatica` | `cardholders.lookup`, `beneficiarios.staging.create` |
+
+## 4. Sync de padron minimo
+
+### POST `{{baseUrl}}/cardholders/sync`
+
+Requiere cliente `sys_ipj` con scope `cardholders.sync`.
 
 ```json
 {
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "8b6427f65679c3b2a7f1..."
+  "sync_id": "SYNC-2026-04-22-01",
+  "items": [
+    {
+      "curp_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "curp_masked": "MELR************06",
+      "tarjeta_numero": "TJ-0080",
+      "status": "active"
+    }
+  ]
 }
 ```
 
-### 3.2 POST `{{baseUrl}}/auth/logout`
-
-Elimina los refresh tokens asociados al usuario autenticado.
-
-- Header: `Authorization: Bearer {{token}}`
-- Respuesta exitosa: `204 No Content`.
-
----
-
-## 4. Autenticacion con OTP
-
-Usa este flujo para sesiones sin password (ideal para QA). El OTP solo se devuelve en la respuesta si `OTP_DEBUG=true`.
-
-### 4.1 POST `{{baseUrl}}/auth/otp/send`
-
-**Body**
+Respuesta:
 
 ```json
 {
-  "curp": "{{otpCurp}}"
+  "processed": 1,
+  "inserted": 1,
+  "updated": 0,
+  "skipped": 0,
+  "conflict": 0
 }
 ```
 
-Con `{{otpCurp}} = HERL020101MBCNRZ01` y `OTP_DEBUG=true` la respuesta incluye:
+## 5. Lookup por CURP
+
+### POST `{{baseUrl}}/cardholders/lookup`
+
+Requiere cliente `unidad_informatica` con scope `cardholders.lookup`.
 
 ```json
 {
-  "message": "OTP generado",
-  "otp": "123456"
+  "curp": "MELR000202MSPSRD06"
 }
 ```
 
-Guarda el codigo automaticamente (si viene en la respuesta):
+Respuesta si existe:
+
+```json
+{
+  "registered": true,
+  "message": "El usuario ya se encuentra registrado con la tarjeta TJ-0080",
+  "folio_tarjeta": "TJ-0080"
+}
+```
+
+Respuesta si no existe:
+
+```json
+{
+  "registered": false,
+  "message": "La CURP no se encuentra registrada en la app"
+}
+```
+
+El lookup no devuelve nombres, domicilio, CURP completo ni `curp_masked`.
+
+## 6. Crear staging de beneficiario
+
+### POST `{{baseUrl}}/beneficiarios-staging`
+
+Requiere cliente `unidad_informatica` con scope `beneficiarios.staging.create`.
+
+```json
+{
+  "external_request_id": "UI-2026-04-22-0001",
+  "nombre": "Julieta",
+  "apellido_paterno": "Morales",
+  "apellido_materno": "Cano",
+  "curp": "MOCJ050521MSPNRL01",
+  "fecha_nacimiento": "2005-05-21",
+  "sexo": "M",
+  "discapacidad": false,
+  "id_ine": "INE123",
+  "telefono": "4441234567",
+  "domicilio": {
+    "calle": "Av. Revolucion",
+    "numero_ext": "321B",
+    "numero_int": null,
+    "colonia": "Zona Centro",
+    "municipio": "San Luis Potosi",
+    "codigo_postal": "22000",
+    "seccional": "001"
+  }
+}
+```
+
+Respuesta:
+
+```json
+{
+  "created": true,
+  "status": "pending",
+  "staging_id": 123
+}
+```
+
+Test sugerido:
 
 ```javascript
-const data = pm.response.json();
-pm.environment.set("otpCode", data.otp);
+pm.test("Staging creado", () => pm.response.to.have.status(201));
+pm.environment.set("stagingId", pm.response.json().staging_id);
 ```
 
-### 4.2 POST `{{baseUrl}}/auth/otp/verify`
+## 7. Listado interno de staging
 
-**Body**
+### GET `{{baseUrl}}/beneficiarios-staging?status=pending`
+
+Requiere `Authorization: Bearer {{token}}` de usuario local con rol `admin`.
+
+Respuesta:
 
 ```json
 {
-  "curp": "{{otpCurp}}",
-  "otp": "{{otpCode}}"
+  "items": [
+    {
+      "id": 123,
+      "external_request_id": "UI-2026-04-22-0001",
+      "curp_masked": "MOCJ************01",
+      "status": "pending",
+      "submitted_at": "2026-04-22T12:00:00.000Z",
+      "sent_at": null,
+      "resolved_at": null,
+      "error_message": null
+    }
+  ]
 }
 ```
 
-Respuesta `200`:
+No devuelve payload descifrado.
+
+## 8. Push manual a Sys_IPJ
+
+### POST `{{baseUrl}}/beneficiarios-staging/{{stagingId}}/push`
+
+Requiere `Authorization: Bearer {{token}}` de usuario local con rol `admin`.
+
+Comportamiento:
+
+- Hace lock transaccional del staging.
+- Descifra payload.
+- Envia `external_request_id` como `Idempotency-Key` y dentro del body hacia `SYS_IPJ_PUSH_URL`.
+- Audita intento y resultado.
+
+Respuesta exitosa:
 
 ```json
 {
-  "accessToken": "<jwt>",
-  "refreshToken": "<refresh>"
+  "sent": true,
+  "message": "Beneficiario enviado a Sys_IPJ",
+  "sys_ipj_status": 201
 }
 ```
 
-Agrega el mismo test que en login para llenar `{{token}}`.
+### DELETE `{{baseUrl}}/beneficiarios-staging/expired?dryRun=true`
 
----
+Requiere `Authorization: Bearer {{token}}` de usuario local con rol `admin`.
 
-## 5. Perfil del usuario autenticado
+Elimina solo registros `pending` o `error` que ya vencieron por TTL, no estan bloqueados y no estan en proceso. Usa `dryRun=true` para revisar cuantos coinciden sin borrar.
+
+Respuesta:
+
+```json
+{
+  "dryRun": true,
+  "ttlDays": 30,
+  "cutoff": "2026-03-23T12:00:00.000Z",
+  "deleted": 0,
+  "matched": 2
+}
+```
+
+## 9. Activacion con Auth0
+
+### POST `{{baseUrl}}/cardholders/verify-activation`
+
+```json
+{
+  "tarjeta_numero": "TJ-0080",
+  "curp": "MELR000202MSPSRD06"
+}
+```
+
+Respuesta:
+
+```json
+{
+  "can_activate": true,
+  "message": "Validacion correcta"
+}
+```
+
+Esta llamada abre una ventana corta de activacion en `cardholders_sync`; `complete-activation` la exige antes de vincular Auth0.
+
+### POST `{{baseUrl}}/cardholders/complete-activation`
+
+```json
+{
+  "tarjeta_numero": "TJ-0080",
+  "auth0_id_token": "{{auth0IdToken}}"
+}
+```
+
+El backend valida JWKS, firma, issuer, audience `AUTH0_CLIENT_ID` y `sub`. El `auth0_user_id` se deriva del `sub`; no se acepta desde el frontend.
+
+Respuesta:
+
+```json
+{
+  "activated": true,
+  "message": "Cuenta vinculada correctamente"
+}
+```
+
+## 10. Endpoint legacy retirado
+
+### POST `{{baseUrl}}/cardholders/MELR000202MSPSRD06/account`
+
+Respuesta:
+
+```json
+{
+  "message": "El alta local con contrasena fue retirada. Usa el flujo de activacion con Auth0."
+}
+```
+
+Status esperado: `410 Gone`.
+
+### POST `{{baseUrl}}/register`
+
+El registro local legacy tambien responde `410 Gone`; los expedientes nuevos deben crearse en `/beneficiarios-staging`.
+
+## 11. Perfil
 
 ### GET `{{baseUrl}}/me`
 
-- Header: `Authorization: Bearer {{token}}`
-- Respuesta cuando usaste a Ana (telefono enmascarado si `EXPOSE_PII=false`):
+Requiere JWT local. Funciona para usuarios Auth0 vinculados porque no depende de CURP ni de password local.
 
 ```json
 {
   "id": 1,
   "nombre": "Ana",
   "apellidos": "Hernandez Ruiz",
-  "edad": 23,
+  "edad": null,
   "creditos": 0,
-  "barcodeValue": "TJ1-2B9D1C-202501",
+  "barcodeValue": "TJ1-<token>-202604",
   "email": "ana.hernandez@example.com",
-  "municipio": "Tijuana",
+  "municipio": "San Luis Potosi",
   "telefono": "***4567",
   "fotoUrl": null,
-  "portadaUrl": null
+  "portadaUrl": null,
+  "auth0UserId": null,
+  "cardholderSyncId": 1,
+  "tarjetaNumero": "TJ-0001"
 }
 ```
-
----
-
-## 6. Catalogo de beneficios
-
-### GET `{{baseUrl}}/catalog`
-
-Parametros utiles:
-
-| Parametro | Significado | Ejemplo |
-|-----------|-------------|---------|
-| `municipio` | Filtra por municipio. | `municipio=Tijuana` |
-| `categoria` | Filtra por categoria. | `categoria=Salud` |
-| `q` | Busca en nombre o descripcion. | `q=coding` |
-| `page`, `pageSize` | Paginacion (max 100). | `page=1&pageSize=10` |
-
-**Casos sugeridos**
-
-1. `GET ...?municipio=Tijuana` debe devolver `Cafe Frontera` y `Coding Lab BC`.
-2. `GET ...?categoria=Salud` regresa `Gimnasio Vitalia`.
-3. `GET ...?q=cine` encuentra `Cine Pacifico`.
-
-**Respuesta tipo**
-
-```json
-{
-  "items": [
-    {
-      "id": 1,
-      "nombre": "Cafe Frontera",
-      "categoria": "Restaurantes",
-      "municipio": "Tijuana",
-      "descuento": "20% en consumo presentando la tarjeta",
-      "direccion": "Av. Revolucion 123, Zona Centro",
-      "horario": "L-D 08:00 - 22:00",
-      "descripcion": "Coffee shop local con descuentos especiales para estudiantes.",
-      "lat": "32.52151",
-      "lng": "-117.02454"
-    }
-  ],
-  "total": 1,
-  "page": 1,
-  "pageSize": 20,
-  "totalPages": 1
-}
-```
-
----
-
-## 7. Tarjetahabiente: lookup y creacion de cuenta
-
-### 7.1 Lookup POST `{{baseUrl}}/cardholders/lookup`
-
-**Body**
-
-```json
-{
-  "curp": "MELR000202MBCSRD06"
-}
-```
-
-**Respuesta 200**
-
-```json
-{
-  "curpMasked": "MELR***********06",
-  "nombres": "Melissa",
-  "apellidos": "Rios Delgado",
-  "municipio": "Tecate",
-  "hasAccount": false
-}
-```
-
-Si `EXPOSE_PII=true`, la respuesta incluye `curp`.
-
-**Escenarios extra**
-
-- `HERL020101MBCNRZ01` devuelve `409` porque ya tiene cuenta.
-- `SAQP950101HBCQRP07` devuelve `404` (tarjeta inactiva).
-- Al superar 5 intentos en 15 minutos recibes `429` y la CURP se bloquea otros 15 minutos.
-
-El lookup exitoso habilita durante 15 minutos la creacion de cuenta (`pending_account_until`).
-
-### 7.2 Crear cuenta POST `{{baseUrl}}/cardholders/MELR000202MBCSRD06/account`
-
-Ejecuta este paso inmediatamente despues del lookup.
-
-```json
-{
-  "username": "melissa.rios@example.com",
-  "password": "NewPassword123!",
-  "confirmPassword": "NewPassword123!"
-}
-```
-
-Respuesta `201`:
-
-```json
-{ "message": "Cuenta creada. Ya puedes iniciar sesion." }
-```
-
-Si repites la peticion recibiras `409` porque la CURP ya tiene `account_user_id`.
-
----
-
-## 8. Solicitud de registro (personas sin tarjeta)
-
-### POST `{{baseUrl}}/register`
-
-El frontend envia **multipart/form-data** con **solo campos de texto**; los documentos (`ine`, `comprobante`, `curpDoc`) ya no son obligatorios para registrar la solicitud.
-
-| Key | Value de ejemplo | Tipo | Validacion |
-|-----|------------------|------|-----------|
-| `nombres` | `Julieta` | Text | >= 2 caracteres |
-| `apellidos` | `Morales Cano` | Text | >= 2 caracteres |
-| `fechaNacimiento` | `21/05/2005` | Text | Formato `DD/MM/AAAA` valido; la edad calculada debe ser <= 29 anos |
-| `curp` | `MOCJ050521MBCNRL01` | Text | CURP oficial; debe codificar la misma fecha de nacimiento |
-| `calle` | `Av. Revolucion` | Text | >= 2 caracteres |
-| `numero` | `321B` | Text | `S/N` o 1-5 digitos + sufijo alfanumerico |
-| `cp` | `22000` | Text | 5 digitos |
-| `colonia` | `Zona Centro` | Text | No vacio |
-| `username` | `julieta.morales@example.com` | Text | Email valido, se guarda en minusculas |
-| `password` | `SecurePass2025!` | Text | >=8 caracteres con mayuscula, minuscula y numero |
-| `aceptaTerminos` | `true` | Text | Debe evaluarse como verdadero (`true`, `1`, `si`, `on`, `yes`) |
-
-> Si aun envias campos de archivo `ine`, `comprobante` o `curpDoc`, el backend los aceptara de forma opcional pero ya no son requeridos para la validacion principal.
-
-**Respuesta 201**
-
-```json
-{
-  "message": "Solicitud recibida",
-  "folio": "TJ-000123",
-  "syncStatus": "success"
-}
-```
-
-Errores comunes:
-
-- `409` si el CURP ya existe en `usuarios`/`cardholders` o hay una solicitud `pending/approved` con el mismo CURP/username.
-- `422` si algun campo no cumple los requisitos (fecha invalida, password debil, CP incorrecto, archivos sin formato permitido o >2 MB).
-- `400` si faltan campos obligatorios antes de validar el resto.
-
-> Si una validacion falla, el backend elimina los archivos ya subidos para evitar basura en el directorio de uploads (`UPLOADS_DIR`, default `uploads/`).
-
----
-
-## 9. QR y recompensas
-
-### POST `{{baseUrl}}/qr/scan`
-
-- Header: `Authorization: Bearer {{token}}`
-
-**Body**
-
-```json
-{
-  "barcodeValue": "TJ1-<token>-YYYYMM"
-}
-```
-
-**Respuesta 200 (cuando acredita)**
-
-```json
-{
-  "awarded": true,
-  "creditos": 2,
-  "delta": 1
-}
-```
-
-**Respuesta 200 (cuando ya se acredito hoy)**
-
-```json
-{
-  "awarded": false,
-  "creditos": 2,
-  "message": "El usuario ya registro un scan el dia de hoy."
-}
-```
-
----
-
-## 10. Buenas practicas
-
-- Versiona tu coleccion y el archivo `readme_postman.md` junto al repositorio para que el equipo tenga los mismos datos de referencia.
-- Antes de cualquier sesion de prueba, ejecuta `npm run seed` para volver a un estado conocido.
-- Usa las variables `{{token}}` y `{{otpCode}}` en tus headers/body en lugar de copiar valores manualmente.
-
-Con esta guia deberias poder cubrir todos los flujos funcionales expuestos por la API y validar regresiones rapidamente.

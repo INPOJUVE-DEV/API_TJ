@@ -10,6 +10,13 @@
     "seed": "node scripts/seed.js",
     "db:ensure": "node scripts/ensure-schema.js",
     "seed:if-needed": "node scripts/seed-if-needed.js",
+    "fixture:cardholders-sync": "node scripts/build-cardholders-sync-fixture.js",
+    "inject:cardholders-sync": "node scripts/inject-cardholders-sync.js",
+    "mock:externals": "node scripts/mock-external-services.js",
+    "setup:postman-local": "node scripts/setup-postman-local-env.js",
+    "export:postman-env": "node scripts/export-postman-environment.js",
+    "build:postman-collection": "node scripts/build-postman-collection.js",
+    "smoke:postman": "node scripts/run-postman-smoke.js",
     "start:render": "npm run db:ensure && npm run seed:if-needed && npm start"
   },
   "dependencies": {

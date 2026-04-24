@@ -22,6 +22,13 @@ module.exports = function verifyToken(req, res, next) {
     req.user = { id: decoded.id };
     next();
   } catch (err) {
-    return res.status(401).json({ message: 'Token inválido' });
+    const decoded = jwt.decode(token, { complete: true });
+    const looksLikeIntegrationToken =
+      decoded?.header?.alg === 'RS256' ||
+      Boolean(decoded?.payload?.iss) ||
+      Boolean(decoded?.payload?.scope);
+    return res
+      .status(looksLikeIntegrationToken ? 403 : 401)
+      .json({ message: looksLikeIntegrationToken ? 'Acceso denegado' : 'Token inválido' });
   }
 };

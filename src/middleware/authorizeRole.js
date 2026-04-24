@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const safeLogger = require('../utils/safeLogger');
 
 module.exports = function authorizeRole(allowedRoles = []) {
   const allowed = new Set(allowedRoles.map((role) => String(role).toLowerCase()));
@@ -21,7 +22,7 @@ module.exports = function authorizeRole(allowedRoles = []) {
       req.user.role = role;
       return next();
     } catch (error) {
-      console.error('Error al validar rol', error);
+      safeLogger.error('Error al validar rol', error);
       return res.status(500).json({ message: 'Error al validar permisos' });
     }
   };

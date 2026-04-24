@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const safeLogger = require('../utils/safeLogger');
 
 const MAX_NAME_LENGTH = 160;
 const MAX_DESC_LENGTH = 2000;
@@ -127,7 +128,7 @@ function handleError(res, error, fallbackMessage) {
   if (error?.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({ message: 'El beneficio ya existe.' });
   }
-  console.error(error);
+  safeLogger.error('Error en catalogo', error);
   return res.status(500).json({ message: fallbackMessage });
 }
 

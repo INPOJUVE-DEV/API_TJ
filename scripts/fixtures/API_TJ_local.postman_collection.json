@@ -1,0 +1,1641 @@
+{
+  "info": {
+    "name": "API_TJ Local Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Coleccion local para recorrer las pruebas de docs/pruebas_postman_API_TJ.md"
+  },
+  "item": [
+    {
+      "name": "00 Login Admin",
+      "item": [
+        {
+          "name": "Login admin local",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.environment.set('admin_token', data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ana.hernandez@example.com\",\n  \"password\": \"Test1234!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/auth/login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Sync",
+      "item": [
+        {
+          "name": "Sync valido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('sync_id', 'SYNC-' + Date.now());",
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'sys_ipj', scopes: [\"cardholders.sync\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Processed 1', function () { pm.expect(data.processed).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sync_id\": \"{{sync_id}}\",\n  \"items\": [\n    {\n      \"curp_hash\": \"{{curp_hash_ok}}\",\n      \"curp_masked\": \"{{curp_masked_ok}}\",\n      \"tarjeta_numero\": \"{{tarjeta_numero_ok}}\",\n      \"status\": \"active\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/sync"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync con token invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer bad.token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sync_id\": \"{{sync_id}}\",\n  \"items\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/sync"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync con scope incorrecto",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"cardholders.lookup\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sync_id\": \"{{sync_id}}\",\n  \"items\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/sync"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync duplicado idempotente",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'sys_ipj', scopes: [\"cardholders.sync\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Updated or skipped', function () { pm.expect((data.updated || 0) + (data.skipped || 0)).to.be.above(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sync_id\": \"{{sync_id}}\",\n  \"items\": [\n    {\n      \"curp_hash\": \"{{curp_hash_ok}}\",\n      \"curp_masked\": \"{{curp_masked_ok}}\",\n      \"tarjeta_numero\": \"{{tarjeta_numero_ok}}\",\n      \"status\": \"active\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/sync"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync con cambio de tarjeta",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'sys_ipj', scopes: [\"cardholders.sync\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sync_id\": \"{{sync_id}}-ALT\",\n  \"items\": [\n    {\n      \"curp_hash\": \"{{curp_hash_ok}}\",\n      \"curp_masked\": \"{{curp_masked_ok}}\",\n      \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n      \"status\": \"active\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/sync"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Lookup",
+      "item": [
+        {
+          "name": "Lookup existente",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"cardholders.lookup\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('registered true', function () { pm.expect(data.registered).to.eql(true); });",
+                  "pm.test('sin CURP', function () { pm.expect(data.curp).to.eql(undefined); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{curp_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/lookup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup inexistente",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"cardholders.lookup\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{curp_bad}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/lookup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup con formato invalido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"cardholders.lookup\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', function () { pm.response.to.have.status(422); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/lookup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup con token de Sys_IPJ",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'sys_ipj', scopes: [\"cardholders.sync\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{curp_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/lookup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/lookup"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Staging",
+      "item": [
+        {
+          "name": "Crear staging valido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('staging_external_request_id')) {",
+                  "  pm.environment.set('staging_external_request_id', 'INF-' + Date.now());",
+                  "}",
+                  "if (!pm.environment.get('staging_curp_new')) {",
+                  "  const seed = Date.now();",
+                  "  const alnum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[seed % 36];",
+                  "  pm.environment.set('staging_curp_new', 'MELR000202MBCSRD' + alnum + (seed % 10));",
+                  "}",
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"beneficiarios.staging.create\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Staging 202', function () { pm.response.to.have.status(202); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Created true', function () { pm.expect(data.created).to.eql(true); });",
+                  "pm.environment.set('staging_id', data.staging_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{staging_external_request_id}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{staging_curp_new}}\",\n    \"nombre\": \"MELISSA\",\n    \"apellido_paterno\": \"RIOS\",\n    \"apellido_materno\": \"DELGADO\",\n    \"fecha_nacimiento\": \"2000-02-02\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE0001\",\n    \"telefono\": \"6641234567\",\n    \"domicilio\": {\n      \"calle\": \"CALLE 1\",\n      \"numero_ext\": \"10\",\n      \"numero_int\": \"2\",\n      \"colonia\": \"CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"0001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging duplicado",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"beneficiarios.staging.create\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{staging_external_request_id}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{staging_curp_new}}\",\n    \"nombre\": \"MELISSA\",\n    \"apellido_paterno\": \"RIOS\",\n    \"apellido_materno\": \"DELGADO\",\n    \"fecha_nacimiento\": \"2000-02-02\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE0001\",\n    \"telefono\": \"6641234567\",\n    \"domicilio\": {\n      \"calle\": \"CALLE 1\",\n      \"numero_ext\": \"10\",\n      \"numero_int\": \"2\",\n      \"colonia\": \"CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"0001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging para CURP sincronizada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"beneficiarios.staging.create\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{staging_external_request_id}}-SYNC\",\n  \"beneficiario\": {\n    \"curp\": \"{{curp_ok}}\",\n    \"nombre\": \"MELISSA\",\n    \"apellido_paterno\": \"RIOS\",\n    \"apellido_materno\": \"DELGADO\",\n    \"fecha_nacimiento\": \"2000-02-02\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE0001\",\n    \"telefono\": \"6641234567\",\n    \"domicilio\": {\n      \"calle\": \"CALLE 1\",\n      \"numero_ext\": \"10\",\n      \"numero_int\": \"2\",\n      \"colonia\": \"CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"0001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging con faltantes en domicilio",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('staging_external_request_id_missing', 'INF-MISS-' + Date.now());",
+                  "const seed = Date.now() + 1;",
+                  "const alnum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[seed % 36];",
+                  "pm.environment.set('staging_curp_missing', 'MELR000202MBCSRD' + alnum + (seed % 10));",
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"beneficiarios.staging.create\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', function () { pm.response.to.have.status(422); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{staging_external_request_id_missing}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{staging_curp_missing}}\",\n    \"nombre\": \"MELISSA\",\n    \"apellido_paterno\": \"RIOS\",\n    \"apellido_materno\": \"DELGADO\",\n    \"fecha_nacimiento\": \"2000-02-02\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE0002\",\n    \"telefono\": \"6641234568\",\n    \"domicilio\": {\n      \"calle\": \"CALLE 1\",\n      \"numero_ext\": \"10\",\n      \"numero_int\": \"2\",\n      \"colonia\": \"CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"\",\n      \"seccional\": \"0001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging con token invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer bad.token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"INF-BAD-TOKEN\",\n  \"beneficiario\": {\n    \"curp\": \"MELR000202MBCSRD08\",\n    \"nombre\": \"MELISSA\",\n    \"apellido_paterno\": \"RIOS\",\n    \"apellido_materno\": \"DELGADO\",\n    \"fecha_nacimiento\": \"2000-02-02\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE0003\",\n    \"telefono\": \"6641234569\",\n    \"domicilio\": {\n      \"calle\": \"CALLE 1\",\n      \"numero_ext\": \"10\",\n      \"numero_int\": \"2\",\n      \"colonia\": \"CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"0001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Staging Admin",
+      "item": [
+        {
+          "name": "Listado con admin interno",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Hay items', function () { pm.expect(Array.isArray(data.items)).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging?status=pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging?status=pending"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listado con token de Informatica",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/integration/issue-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ client_code: 'unidad_informatica', scopes: [\"beneficiarios.staging.create\"] })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('integration_token', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integration_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging?status=pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging?status=pending"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Push valido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('sent true', function () { pm.expect(data.sent).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging/{{staging_id}}/push",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging/{{staging_id}}/push"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Push duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging/{{staging_id}}/push",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging/{{staging_id}}/push"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Push con staging inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/beneficiarios-staging/999999/push",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/beneficiarios-staging/999999/push"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Activacion",
+      "item": [
+        {
+          "name": "Verify activation correcto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('can_activate true', function () { pm.expect(pm.response.json().can_activate).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n  \"curp\": \"{{curp_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/verify-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/verify-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify activation con tarjeta incorrecta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403 o 422', function () { pm.expect([403, 422]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_bad}}\",\n  \"curp\": \"{{curp_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/verify-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/verify-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify activation con CURP incorrecta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403 o 422', function () { pm.expect([403, 422]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n  \"curp\": \"{{curp_bad}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/verify-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/verify-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify activation para usuario ya vinculado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"TJ-0001\",\n  \"curp\": \"HERL020101MSPNRZ01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/verify-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/verify-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Complete activation valido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const seed = Date.now();",
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/auth0/issue-id-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({",
+                  "      sub: 'auth0|postman-local-' + seed,",
+                  "      email: 'postman.local.' + seed + '@example.com',",
+                  "      aud: 'postman-local-client',",
+                  "      issuer_base: 'http://host.docker.internal:9091/auth0'",
+                  "    })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('auth0_id_token_ok', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('activated true', function () { pm.expect(pm.response.json().activated).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n  \"auth0_id_token\": \"{{auth0_id_token_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/complete-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/complete-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Complete activation con token Auth0 invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 o 403', function () { pm.expect([401, 403]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n  \"auth0_id_token\": \"{{auth0_id_token_bad}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/complete-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/complete-activation"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Complete activation para tarjeta ya vinculada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const seed = Date.now();",
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('mock_base_url') + '/auth0/issue-id-token',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({",
+                  "      sub: 'auth0|postman-local-' + seed,",
+                  "      email: 'postman.local.' + seed + '@example.com',",
+                  "      aud: 'postman-local-client',",
+                  "      issuer_base: 'http://host.docker.internal:9091/auth0'",
+                  "    })",
+                  "  }",
+                  "}, function (err, res) {",
+                  "  if (err) { throw err; }",
+                  "  const data = res.json();",
+                  "  pm.environment.set('auth0_id_token_ok', data.token);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tarjeta_numero\": \"{{tarjeta_numero_alt}}\",\n  \"auth0_id_token\": \"{{auth0_id_token_ok}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/complete-activation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/complete-activation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Legacy",
+      "item": [
+        {
+          "name": "Cuenta local legacy retirada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 410', function () { pm.response.to.have.status(410); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cardholders/MELR000202MSPSRD06/account",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/cardholders/MELR000202MSPSRD06/account"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Register legacy retirado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 410', function () { pm.response.to.have.status(410); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "/api/v1/register"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

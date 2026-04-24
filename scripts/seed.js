@@ -1,7 +1,8 @@
-﻿/* eslint-disable no-console */
+/* eslint-disable no-console */
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
+const { buildCurpLookup } = require('../src/services/curpHashService');
 
 const NODE_ENV = String(process.env.NODE_ENV || '').toLowerCase();
 const ALLOW_PROD_SEED = String(process.env.ALLOW_PROD_SEED || '').toLowerCase() === 'true';
@@ -17,53 +18,53 @@ function getSeedPassword(envKey, fallback) {
   return fallback;
 }
 
-const MUNICIPIOS = ['Tijuana', 'Mexicali', 'Ensenada', 'Tecate'];
+const MUNICIPIOS = ['San Luis Potosí', 'Soledad de Graciano Sánchez', 'Ciudad Valles', 'Matehuala'];
 const CATEGORIAS = ['Restaurantes', 'Salud', 'Tecnologia', 'Entretenimiento', 'Educacion'];
 
 const BENEFICIOS = [
   {
-    nombre: 'Cafe Frontera',
+    nombre: 'Cafe Huasteco',
     categoria: 'Restaurantes',
-    municipio: 'Tijuana',
+    municipio: 'Ciudad Valles',
     descuento: '20% en consumo presentando la tarjeta',
-    direccion: 'Av. Revolucion 123, Zona Centro',
+    direccion: 'Blvd. México-Laredo 123, Centro',
     horario: 'L-D 08:00 - 22:00',
     descripcion: 'Coffee shop local con descuentos especiales para estudiantes.',
-    lat: 32.52151,
-    lng: -117.02454
+    lat: 21.9833,
+    lng: -99.0167
   },
   {
-    nombre: 'Gimnasio Vitalia',
+    nombre: 'Gimnasio Potosino',
     categoria: 'Salud',
-    municipio: 'Mexicali',
+    municipio: 'San Luis Potosí',
     descuento: 'Inscripcion gratis + 15% mensualidad',
-    direccion: 'Calz. Cetys 456, Col. Alameda',
+    direccion: 'Av. Venustiano Carranza 456, Morales',
     horario: 'L-S 06:00 - 23:00',
     descripcion: 'Gimnasio con entrenamiento funcional y clases grupales.',
-    lat: 32.62498,
-    lng: -115.45226
+    lat: 22.1565,
+    lng: -100.9754
   },
   {
-    nombre: 'Cine Pacifico',
+    nombre: 'Cine Centro',
     categoria: 'Entretenimiento',
-    municipio: 'Ensenada',
+    municipio: 'Soledad de Graciano Sánchez',
     descuento: '2x1 en taquilla martes y jueves',
-    direccion: 'Blvd. Costero 789, Zona Centro',
+    direccion: 'Plaza Principal 789, Zona Centro',
     horario: 'L-D 12:00 - 23:59',
     descripcion: 'Cadena local de cines con estrenos y funciones especiales.',
-    lat: 31.86021,
-    lng: -116.60573
+    lat: 22.1818,
+    lng: -100.9388
   },
   {
-    nombre: 'Coding Lab BC',
+    nombre: 'Tech Lab SLP',
     categoria: 'Tecnologia',
-    municipio: 'Tijuana',
+    municipio: 'San Luis Potosí',
     descuento: 'Beca del 30% en cursos intensivos',
-    direccion: 'Av. Innovacion 321, Col. Chapultepec',
+    direccion: 'Av. Himalaya 321, Lomas',
     horario: 'L-V 09:00 - 19:00',
     descripcion: 'Aceleradora de talento digital con programas de programacion.',
-    lat: 32.49283,
-    lng: -116.99911
+    lat: 22.1408,
+    lng: -101.0184
   }
 ];
 
@@ -71,40 +72,40 @@ const USUARIOS = [
   {
     nombre: 'Ana',
     apellidos: 'Hernandez Ruiz',
-    curp: 'HERL020101MBCNRZ01',
+    curp: 'HERL020101MSPNRZ01',
     email: 'ana.hernandez@example.com',
-    telefono: '6641234567',
-    municipio: 'Tijuana',
+    telefono: '4441234567',
+    municipio: 'San Luis Potosí',
     password: getSeedPassword('SEED_ADMIN_PASSWORD', 'Test1234!'),
     role: 'admin'
   },
   {
     nombre: 'Carlos',
     apellidos: 'Lopez Mendez',
-    curp: 'LOMC990505HBCLPM02',
+    curp: 'LOMC990505HSPLPM02',
     email: 'carlos.lopez@example.com',
-    telefono: '6869876543',
-    municipio: 'Mexicali',
+    telefono: '4819876543',
+    municipio: 'Ciudad Valles',
     password: getSeedPassword('SEED_READER1_PASSWORD', 'Secret456!'),
     role: 'reader'
   },
   {
     nombre: 'Maria',
     apellidos: 'Soto Aguilar',
-    curp: 'SOAM010910MBCSGR03',
+    curp: 'SOAM010910MSPSGR03',
     email: 'maria.soto@example.com',
-    telefono: '6465551122',
-    municipio: 'Ensenada',
+    telefono: '4885551122',
+    municipio: 'Matehuala',
     password: getSeedPassword('SEED_READER2_PASSWORD', 'Password789!'),
     role: 'reader'
   },
   {
     nombre: 'Scanner',
     apellidos: 'Operador',
-    curp: 'SCAN010101HBCNPR01',
+    curp: 'SCAN010101HSPNPR01',
     email: 'scanner@tj.local',
     telefono: null,
-    municipio: 'Tijuana',
+    municipio: 'San Luis Potosí',
     password: getSeedPassword('SEED_SCANNER_PASSWORD', 'Scan1234!'),
     role: 'scanner'
   }
@@ -112,36 +113,36 @@ const USUARIOS = [
 
 const CARDHOLDERS = [
   {
-    curp: 'HERL020101MBCNRZ01',
+    curp: 'HERL020101MSPNRZ01',
     nombres: 'Ana',
     apellidos: 'Hernandez Ruiz',
-    municipio: 'Tijuana',
+    municipio: 'San Luis Potosí',
     tarjeta: 'TJ-0001',
     status: 'active',
     linkToUserEmail: 'ana.hernandez@example.com'
   },
   {
-    curp: 'LOMC990505HBCLPM02',
+    curp: 'LOMC990505HSPLPM02',
     nombres: 'Carlos',
     apellidos: 'Lopez Mendez',
-    municipio: 'Mexicali',
+    municipio: 'Ciudad Valles',
     tarjeta: 'TJ-0002',
     status: 'active',
     linkToUserEmail: 'carlos.lopez@example.com'
   },
   {
-    curp: 'MELR000202MBCSRD06',
+    curp: 'MELR000202MSPSRD06',
     nombres: 'Melissa',
     apellidos: 'Rios Delgado',
-    municipio: 'Tecate',
+    municipio: 'Soledad de Graciano Sánchez',
     tarjeta: 'TJ-0080',
     status: 'active'
   },
   {
-    curp: 'SAQP950101HBCQRP07',
+    curp: 'SAQP950101HSPQRP07',
     nombres: 'Santiago',
     apellidos: 'Quintero Perez',
-    municipio: 'Tijuana',
+    municipio: 'San Luis Potosí',
     tarjeta: 'TJ-0099',
     status: 'inactive'
   }
@@ -152,13 +153,13 @@ const SOLICITUDES = [
     nombres: 'Fernanda',
     apellidos: 'Salas Quiroz',
     fechaNacimiento: '2003-04-15',
-    curp: 'SAQF030415MBCSLQ04',
+    curp: 'SAQF030415MSPSLQ04',
     username: 'fernanda.salas@example.com',
     colonia: 'Zona Centro',
-    municipio: 'Tijuana',
-    calle: 'Av. Hidalgo',
+    municipio: 'San Luis Potosí',
+    calle: 'Av. Himno Nacional',
     numero: '1204',
-    cp: '22000',
+    cp: '78280',
     password: getSeedPassword('SEED_SOLICITUD_1_PASSWORD', 'Temporal123!'),
     status: 'pending',
     aceptaTerminos: true,
@@ -170,13 +171,13 @@ const SOLICITUDES = [
     nombres: 'Luis',
     apellidos: 'Camacho Torres',
     fechaNacimiento: '2002-11-02',
-    curp: 'CATL021102HBCCMT05',
+    curp: 'CATL021102HSPCMT05',
     username: 'luis.camacho@example.com',
-    colonia: 'Col. Libertad',
-    municipio: 'Mexicali',
+    colonia: 'Centro',
+    municipio: 'Ciudad Valles',
     calle: 'Calle 10',
     numero: '543B',
-    cp: '21010',
+    cp: '79000',
     password: getSeedPassword('SEED_SOLICITUD_2_PASSWORD', 'Temporal456!'),
     status: 'approved',
     aceptaTerminos: true,
@@ -227,18 +228,22 @@ async function ensureSchema(pool) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS usuarios (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      nombre VARCHAR(120) NOT NULL,
-      apellidos VARCHAR(150) NOT NULL,
-      curp VARCHAR(20) NOT NULL UNIQUE,
+      nombre VARCHAR(120) NULL,
+      apellidos VARCHAR(150) NULL,
+      curp VARCHAR(20) NULL UNIQUE,
       email VARCHAR(150) NOT NULL UNIQUE,
       telefono VARCHAR(20),
       municipio_id INT,
-      password_hash VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255) NULL,
       role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader',
       creditos INT NOT NULL DEFAULT 0,
       foto_url VARCHAR(255),
       portada_url VARCHAR(255),
+      auth0_user_id VARCHAR(191) UNIQUE NULL,
+      cardholder_sync_id INT NULL,
+      status ENUM('pending','active','blocked') NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (municipio_id) REFERENCES municipios(id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
@@ -292,6 +297,125 @@ async function ensureSchema(pool) {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (cardholder_id) REFERENCES cardholders(id)
         ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS cardholders_sync (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      curp_hash CHAR(64) NOT NULL UNIQUE,
+      curp_masked VARCHAR(20) NOT NULL,
+      tarjeta_numero VARCHAR(50) NOT NULL UNIQUE,
+      status ENUM('active','inactive','blocked') NOT NULL DEFAULT 'active',
+      sync_source VARCHAR(120),
+      synced_at DATETIME NOT NULL,
+      account_user_id INT UNIQUE NULL,
+      auth0_user_id VARCHAR(191) UNIQUE NULL,
+      activation_verified_until DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_user_id) REFERENCES usuarios(id)
+        ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS beneficiario_staging (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      external_request_id VARCHAR(120) NOT NULL UNIQUE,
+      curp_hash CHAR(64) NOT NULL,
+      curp_masked VARCHAR(20) NOT NULL,
+      payload_ciphertext LONGTEXT NOT NULL,
+      payload_iv VARCHAR(64) NOT NULL,
+      payload_tag VARCHAR(64) NOT NULL,
+      status ENUM('pending','sent','accepted','rejected','error') NOT NULL DEFAULT 'pending',
+      submitted_by_system VARCHAR(120) NOT NULL,
+      submitted_at DATETIME NOT NULL,
+      sent_at DATETIME NULL,
+      resolved_at DATETIME NULL,
+      sys_ipj_response_code INT NULL,
+      error_message TEXT NULL,
+      locked_at DATETIME NULL,
+      locked_by VARCHAR(120) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_beneficiario_staging_curp_hash (curp_hash),
+      INDEX idx_beneficiario_staging_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS sync_audit_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      direction ENUM('SYS_IPJ_TO_API_TJ','API_TJ_TO_SYS_IPJ') NOT NULL,
+      executed_by VARCHAR(120),
+      request_count INT NOT NULL DEFAULT 0,
+      inserted_count INT NOT NULL DEFAULT 0,
+      updated_count INT NOT NULL DEFAULT 0,
+      skipped_count INT NOT NULL DEFAULT 0,
+      conflict_count INT NOT NULL DEFAULT 0,
+      status ENUM('success','partial','failed') NOT NULL,
+      request_checksum CHAR(64),
+      started_at DATETIME NOT NULL,
+      finished_at DATETIME NOT NULL,
+      error_message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS service_clients (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_code VARCHAR(80) NOT NULL UNIQUE,
+      name VARCHAR(160) NOT NULL,
+      status ENUM('active','inactive','blocked') NOT NULL DEFAULT 'active',
+      allowed_scopes JSON NOT NULL,
+      ip_allowlist JSON NULL,
+      key_id_current VARCHAR(120) NULL,
+      last_used_at DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS service_client_keys (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_id INT NOT NULL,
+      kid VARCHAR(120) NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      status ENUM('active','inactive','revoked') NOT NULL DEFAULT 'active',
+      valid_from DATETIME NULL,
+      valid_until DATETIME NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES service_clients(id)
+        ON DELETE CASCADE,
+      INDEX idx_service_client_keys_client (client_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS integration_jti_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_id INT NOT NULL,
+      jti VARCHAR(191) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_integration_jti_client (client_id, jti),
+      FOREIGN KEY (client_id) REFERENCES service_clients(id)
+        ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS integration_audit_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_id INT NULL,
+      client_code VARCHAR(80) NULL,
+      method VARCHAR(12) NOT NULL,
+      path VARCHAR(255) NOT NULL,
+      required_scope VARCHAR(120) NULL,
+      ip_address VARCHAR(45) NULL,
+      status_code INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_integration_audit_client_created (client_code, created_at),
+      FOREIGN KEY (client_id) REFERENCES service_clients(id)
+        ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS staging_push_attempts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      staging_id INT NOT NULL,
+      external_request_id VARCHAR(120) NOT NULL,
+      actor VARCHAR(120),
+      request_checksum CHAR(64),
+      response_status INT,
+      status ENUM('accepted','rejected','error') NOT NULL,
+      error_message TEXT,
+      attempted_at DATETIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staging_id) REFERENCES beneficiario_staging(id)
+        ON DELETE CASCADE,
+      INDEX idx_staging_push_attempts_staging (staging_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS solicitudes_registro (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -399,8 +523,10 @@ async function ensureSchema(pool) {
 
   const [[{ dbName }]] = await pool.query('SELECT DATABASE() AS dbName');
   await ensureUsuariosColumns(pool, dbName);
+  await relaxUsuariosForAuth0(pool, dbName);
   await ensureUsuariosRoleEnum(pool, dbName);
   await ensureSolicitudesColumns(pool, dbName);
+  await ensureNewPatchColumns(pool, dbName);
 }
 
 async function ensureColumn(pool, dbName, table, column, definition) {
@@ -436,6 +562,60 @@ async function ensureUsuariosColumns(pool, dbName) {
   await ensureColumn(pool, dbName, 'usuarios', 'creditos', 'INT NOT NULL DEFAULT 0');
   await ensureColumn(pool, dbName, 'usuarios', 'foto_url', 'VARCHAR(255) NULL');
   await ensureColumn(pool, dbName, 'usuarios', 'portada_url', 'VARCHAR(255) NULL');
+  await ensureColumn(pool, dbName, 'usuarios', 'auth0_user_id', 'VARCHAR(191) UNIQUE NULL');
+  await ensureColumn(pool, dbName, 'usuarios', 'cardholder_sync_id', 'INT NULL');
+  await ensureColumn(
+    pool,
+    dbName,
+    'usuarios',
+    'status',
+    "ENUM('pending','active','blocked') NOT NULL DEFAULT 'active'"
+  );
+  await ensureColumn(
+    pool,
+    dbName,
+    'usuarios',
+    'updated_at',
+    'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
+  );
+}
+
+async function relaxUsuariosForAuth0(pool, dbName) {
+  const [rows] = await pool.execute(
+    `SELECT COLUMN_NAME, IS_NULLABLE
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'usuarios'
+       AND COLUMN_NAME IN ('nombre','apellidos','curp','password_hash')`,
+    [dbName]
+  );
+  const nullable = rows.reduce((acc, row) => {
+    acc[row.COLUMN_NAME] = row.IS_NULLABLE === 'YES';
+    return acc;
+  }, {});
+  if (!nullable.nombre) {
+    await pool.execute('ALTER TABLE usuarios MODIFY COLUMN nombre VARCHAR(120) NULL');
+  }
+  if (!nullable.apellidos) {
+    await pool.execute('ALTER TABLE usuarios MODIFY COLUMN apellidos VARCHAR(150) NULL');
+  }
+  if (!nullable.curp) {
+    await pool.execute('ALTER TABLE usuarios MODIFY COLUMN curp VARCHAR(20) NULL');
+  }
+  if (!nullable.password_hash) {
+    await pool.execute('ALTER TABLE usuarios MODIFY COLUMN password_hash VARCHAR(255) NULL');
+  }
+}
+
+async function ensureNewPatchColumns(pool, dbName) {
+  await ensureColumn(pool, dbName, 'beneficiario_staging', 'locked_at', 'DATETIME NULL');
+  await ensureColumn(pool, dbName, 'beneficiario_staging', 'locked_by', 'VARCHAR(120) NULL');
+  await ensureColumn(
+    pool,
+    dbName,
+    'cardholders_sync',
+    'activation_verified_until',
+    'DATETIME NULL'
+  );
 }
 
 async function ensureUsuariosRoleEnum(pool, dbName) {
@@ -501,6 +681,94 @@ async function seedCardholders(pool, municipioMap) {
     acc[row.curp] = row.id;
     return acc;
   }, {});
+}
+
+async function seedCardholdersSync(pool, userMap) {
+  for (const holder of CARDHOLDERS) {
+    const { curpHash, curpMasked } = buildCurpLookup(holder.curp);
+    const userId =
+      (holder.linkToUserEmail && userMap.byEmail[holder.linkToUserEmail]) ||
+      (holder.linkToUserCurp && userMap.byCurp[holder.linkToUserCurp]) ||
+      null;
+    await pool.execute(
+      `INSERT INTO cardholders_sync
+        (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at, account_user_id)
+       VALUES (?, ?, ?, ?, 'seed-backfill', ?, ?)
+       ON DUPLICATE KEY UPDATE
+        curp_masked = VALUES(curp_masked),
+        tarjeta_numero = VALUES(tarjeta_numero),
+        status = VALUES(status),
+        sync_source = VALUES(sync_source),
+        synced_at = VALUES(synced_at),
+        account_user_id = COALESCE(cardholders_sync.account_user_id, VALUES(account_user_id))`,
+      [
+        curpHash,
+        curpMasked,
+        holder.tarjeta || null,
+        holder.status || 'active',
+        new Date(),
+        userId
+      ]
+    );
+  }
+}
+
+async function syncUsuariosCardholderSyncIds(pool) {
+  await pool.execute(
+    `UPDATE usuarios u
+     JOIN cardholders_sync cs ON cs.account_user_id = u.id
+     SET u.cardholder_sync_id = cs.id
+     WHERE u.cardholder_sync_id IS NULL`
+  );
+}
+
+async function seedServiceClients(pool) {
+  const clients = [
+    {
+      clientCode: 'sys_ipj',
+      name: 'Sys_IPJ',
+      scopes: ['cardholders.sync'],
+      kid: 'sys_ipj-current',
+      publicKey: process.env.SYS_IPJ_JWT_PUBLIC_KEY || ''
+    },
+    {
+      clientCode: 'unidad_informatica',
+      name: 'Unidad de Informatica',
+      scopes: ['cardholders.lookup', 'beneficiarios.staging.create'],
+      kid: 'unidad_informatica-current',
+      publicKey: process.env.INFORMATICA_JWT_PUBLIC_KEY || ''
+    }
+  ];
+
+  for (const client of clients) {
+    await pool.execute(
+      `INSERT INTO service_clients
+        (client_code, name, status, allowed_scopes, ip_allowlist, key_id_current)
+       VALUES (?, ?, 'active', ?, JSON_ARRAY(), ?)
+       ON DUPLICATE KEY UPDATE
+        name = VALUES(name),
+        allowed_scopes = VALUES(allowed_scopes),
+        key_id_current = VALUES(key_id_current)`,
+      [client.clientCode, client.name, JSON.stringify(client.scopes), client.kid]
+    );
+
+    if (client.publicKey) {
+      const [rows] = await pool.execute(
+        'SELECT id FROM service_clients WHERE client_code = ? LIMIT 1',
+        [client.clientCode]
+      );
+      await pool.execute(
+        `INSERT INTO service_client_keys
+          (client_id, kid, public_key, status, valid_from)
+         VALUES (?, ?, ?, 'active', ?)
+         ON DUPLICATE KEY UPDATE
+          public_key = VALUES(public_key),
+          status = 'active',
+          valid_from = VALUES(valid_from)`,
+        [rows[0].id, client.kid, client.publicKey, new Date()]
+      );
+    }
+  }
 }
 
 async function seedCategorias(pool) {
@@ -605,6 +873,12 @@ async function linkCardholdersToUsers(pool, cardholderMap, userMap) {
     if (cardholderId && userId) {
       await pool.execute(
         `UPDATE cardholders
+         SET account_user_id = NULL
+         WHERE account_user_id = ? AND id <> ?`,
+        [userId, cardholderId]
+      );
+      await pool.execute(
+        `UPDATE cardholders
          SET account_user_id = ?
          WHERE id = ?`,
         [userId, cardholderId]
@@ -687,6 +961,13 @@ async function main() {
 
     await linkCardholdersToUsers(pool, cardholderMap, userMap);
     console.log('Cardholders asociados a usuarios.');
+
+    await seedCardholdersSync(pool, userMap);
+    await syncUsuariosCardholderSyncIds(pool);
+    console.log('Padron sincronizado de ejemplo listo.');
+
+    await seedServiceClients(pool);
+    console.log('Clientes de integracion listos.');
 
     await seedSolicitudes(pool, municipioMap);
     console.log('Solicitudes de registro listas.');

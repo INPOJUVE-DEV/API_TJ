@@ -1,0 +1,35 @@
+{
+  "sync_id": "CARDHOLDERS-SYNC-SAMPLE-2026-04-23",
+  "items": [
+    {
+      "curp_hash": "de2a2e327878455e0c176c891b5aa9a2fb0f2871b84d6a84a8a5022e41bb4b9a",
+      "curp_masked": "MELR************06",
+      "tarjeta_numero": "TJ-SIM-0001",
+      "status": "active"
+    },
+    {
+      "curp_hash": "ade62e0c2d1124bb62c884a119471be421951b543e8a9033386681c29e3e9e3d",
+      "curp_masked": "SAQP************07",
+      "tarjeta_numero": "TJ-SIM-0002",
+      "status": "inactive"
+    },
+    {
+      "curp_hash": "7d7d30689a8de2f864b1a5baf41aec228b87f56080846d750bda7a75bc12ad60",
+      "curp_masked": "LOMC************02",
+      "tarjeta_numero": "TJ-SIM-0003",
+      "status": "active"
+    },
+    {
+      "curp_hash": "3c2198343c60dd48e77df6e33889404c2576bcd5790b74d598ab631a26e75462",
+      "curp_masked": "HERL************01",
+      "tarjeta_numero": "TJ-SIM-0004",
+      "status": "blocked"
+    },
+    {
+      "curp_hash": "238d9b9348291706631b7d456216050ebeaf33978dac3274edaa6466687e1bb0",
+      "curp_masked": "CATL************05",
+      "tarjeta_numero": "TJ-SIM-0005",
+      "status": "active"
+    }
+  ]
+}

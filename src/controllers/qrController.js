@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { findTokenByBarcode } = require('../services/qrTokens');
+const safeLogger = require('../utils/safeLogger');
 
 const COIN_REWARD_RAW = Number(process.env.COIN_REWARD_PER_SCAN || 1);
 const COIN_REWARD = Number.isFinite(COIN_REWARD_RAW) ? COIN_REWARD_RAW : 1;
@@ -19,7 +20,7 @@ exports.scan = async (req, res) => {
   try {
     tokenRow = await findTokenByBarcode(barcodeValue, now);
   } catch (error) {
-    console.error('Error al validar QR', error);
+    safeLogger.error('Error al validar QR', error);
     return res.status(500).json({ message: 'Error al validar el QR.' });
   }
   if (!tokenRow) {
@@ -86,10 +87,10 @@ exports.scan = async (req, res) => {
       try {
         await connection.rollback();
       } catch (rollbackError) {
-        console.error('Error al revertir la transaccion de scan', rollbackError);
+        safeLogger.error('Error al revertir la transaccion de scan', rollbackError);
       }
     }
-    console.error('Error en scan de QR', error);
+    safeLogger.error('Error en scan de QR', error);
     return res.status(500).json({ message: 'Error al registrar el scan.' });
   } finally {
     if (connection) {

@@ -30,12 +30,14 @@ const catalogRoutes = require('./routes/catalog');
 const registerRoutes = require('./routes/register');
 const cardholderRoutes = require('./routes/cardholders');
 const qrRoutes = require('./routes/qr');
+const beneficiariosStagingRoutes = require('./routes/beneficiariosStaging');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', userRoutes);
 app.use('/api/v1', catalogRoutes);
 app.use('/api/v1', registerRoutes);
 app.use('/api/v1/cardholders', cardholderRoutes);
+app.use('/api/v1/beneficiarios-staging', beneficiariosStagingRoutes);
 app.use('/api/v1/qr', qrRoutes);
 
 const PORT = process.env.PORT || 8080;

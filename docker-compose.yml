@@ -17,12 +17,14 @@
       retries: 5
 
   api:
-    build: .
+    image: node:22-bookworm
     ports:
-      - "${API_HOST_PORT:-9080}:8080"
+      - "${API_HOST_PORT:-8081}:8080"
     depends_on:
       db:
         condition: service_healthy
+    working_dir: /app
+    command: sh -lc "npm install && npm start"
     environment:
       PORT: 8080
       FRONTEND_ORIGIN: http://localhost:3000
@@ -31,10 +33,18 @@
       DB_USER: usuario
       DB_PASSWORD: password
       DB_NAME: tarjeta_joven
-      JWT_SECRET: supersecreto
+      JWT_SECRET: supersecreto-local
       JWT_EXPIRATION: 15m
+      CURP_HASH_SECRET: curp-secret-local-please-change
+      FIELD_ENCRYPTION_KEY: field-secret-local-please-change
+      INTEGRATION_JWT_AUDIENCE: api_tj
+      AUTH0_DOMAIN: http://host.docker.internal:9091/auth0
+      AUTH0_CLIENT_ID: postman-local-client
+      SYS_IPJ_PUSH_URL: http://host.docker.internal:9091/sys-ipj/beneficiarios
     volumes:
-      - ./uploads:/app/uploads
+      - ./:/app
+      - api_node_modules:/app/node_modules
 
 volumes:
   db_data:
+  api_node_modules:

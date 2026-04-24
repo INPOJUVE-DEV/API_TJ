@@ -3,6 +3,7 @@ const {
   formatBarcodeValue,
   getOrCreateActiveToken
 } = require('../services/qrTokens');
+const safeLogger = require('../utils/safeLogger');
 
 const EXPOSE_PII = String(process.env.EXPOSE_PII || '').toLowerCase() === 'true';
 
@@ -33,42 +34,6 @@ function getYearMonthFromDateValue(dateValue) {
   return null;
 }
 
-function extractBirthDateFromCurp(curp) {
-  if (typeof curp !== 'string' || curp.length < 10) {
-    return null;
-  }
-  const year = Number(curp.slice(4, 6));
-  const month = Number(curp.slice(6, 8));
-  const day = Number(curp.slice(8, 10));
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return null;
-  }
-  const now = new Date();
-  const currentTwoDigits = now.getFullYear() % 100;
-  const century = year <= currentTwoDigits ? 2000 : 1900;
-  const fullYear = century + year;
-  const date = new Date(fullYear, month - 1, day);
-  if (date.getFullYear() !== fullYear || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    return null;
-  }
-  return date;
-}
-
-function calculateAge(birthDate) {
-  if (!(birthDate instanceof Date)) {
-    return null;
-  }
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const hasNotHadBirthdayYet =
-    today.getMonth() < birthDate.getMonth() ||
-    (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate());
-  if (hasNotHadBirthdayYet) {
-    age -= 1;
-  }
-  return age;
-}
-
 exports.getProfile = async (req, res) => {
   if (!req.user?.id) {
     return res.status(401).json({ message: 'Token requerido' });
@@ -76,10 +41,13 @@ exports.getProfile = async (req, res) => {
 
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.nombre, u.apellidos, u.curp, u.email, u.telefono, u.creditos,
-              u.foto_url AS fotoUrl, u.portada_url AS portadaUrl, m.nombre AS municipio
+      `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.creditos,
+              u.foto_url AS fotoUrl, u.portada_url AS portadaUrl,
+              u.auth0_user_id AS auth0UserId, u.cardholder_sync_id AS cardholderSyncId,
+              m.nombre AS municipio, cs.tarjeta_numero AS tarjetaNumero
        FROM usuarios u
        LEFT JOIN municipios m ON u.municipio_id = m.id
+       LEFT JOIN cardholders_sync cs ON cs.id = u.cardholder_sync_id
        WHERE u.id = ?`,
       [req.user.id]
     );
@@ -89,8 +57,6 @@ exports.getProfile = async (req, res) => {
     }
 
     const user = rows[0];
-    const birthDate = extractBirthDateFromCurp(user.curp);
-    const age = calculateAge(birthDate);
     const tokenRow = await getOrCreateActiveToken(user.id);
     const yearMonth = tokenRow ? getYearMonthFromDateValue(tokenRow.valid_from) : null;
     const barcodeValue =
@@ -100,19 +66,22 @@ exports.getProfile = async (req, res) => {
       id: user.id,
       nombre: user.nombre,
       apellidos: user.apellidos,
-      edad: age,
+      edad: null,
       creditos: Number(user.creditos || 0),
       barcodeValue,
       email: user.email,
       municipio: user.municipio,
       telefono: EXPOSE_PII ? user.telefono : maskPhone(user.telefono),
       fotoUrl: user.fotoUrl || null,
-      portadaUrl: user.portadaUrl || null
+      portadaUrl: user.portadaUrl || null,
+      auth0UserId: user.auth0UserId || null,
+      cardholderSyncId: user.cardholderSyncId || null,
+      tarjetaNumero: user.tarjetaNumero || null
     };
 
     return res.json(response);
   } catch (error) {
-    console.error('Error al cargar perfil', error);
+    safeLogger.error('Error al cargar perfil', error);
     return res.status(500).json({ message: 'Error al cargar el perfil.' });
   }
 };

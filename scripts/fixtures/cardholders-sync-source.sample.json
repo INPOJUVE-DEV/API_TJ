@@ -1,0 +1,31 @@
+{
+  "sync_id": "CARDHOLDERS-SYNC-SAMPLE-2026-04-23",
+  "source": "sys_ipj",
+  "items": [
+    {
+      "curp": "MELR000202MSPSRD06",
+      "tarjeta_numero": "TJ-SIM-0001",
+      "status": "active"
+    },
+    {
+      "curp": "SAQP950101HSPQRP07",
+      "tarjeta_numero": "TJ-SIM-0002",
+      "status": "inactive"
+    },
+    {
+      "curp": "LOMC990505HSPLPM02",
+      "tarjeta_numero": "TJ-SIM-0003",
+      "status": "active"
+    },
+    {
+      "curp": "HERL020101MSPNRZ01",
+      "tarjeta_numero": "TJ-SIM-0004",
+      "status": "blocked"
+    },
+    {
+      "curp": "CATL021102HSPCMT05",
+      "tarjeta_numero": "TJ-SIM-0005",
+      "status": "active"
+    }
+  ]
+}

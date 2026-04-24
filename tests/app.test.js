@@ -7,7 +7,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 jest.mock('../src/config/db', () => {
   const mockExecute = jest.fn().mockImplementation(async (sql) => {
     if (typeof sql === 'string' && sql.includes('SELECT role FROM usuarios')) {
-      return [[{ role: 'reader' }], []];
+      return [[{ role: 'admin' }], []];
     }
     if (typeof sql === 'string' && sql.includes('COUNT(*)')) {
       return [[{ total: 0 }], []];
@@ -51,25 +51,33 @@ describe('Pruebas de API', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  test('POST /api/v1/register sin campos obligatorios devuelve 400', async () => {
+  test('POST /api/v1/register devuelve 410 por flujo retirado', async () => {
     const res = await request(app).post('/api/v1/register').send({});
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(410);
   });
 
-  test('POST /api/v1/auth/otp/send sin curp devuelve 400', async () => {
+  test('POST /api/v1/auth/otp/send devuelve 410 por flujo retirado', async () => {
     const res = await request(app).post('/api/v1/auth/otp/send').send({});
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(410);
   });
 
-  test('POST /api/v1/cardholders/lookup sin curp devuelve 422', async () => {
+  test('POST /api/v1/cardholders/lookup sin token devuelve 401', async () => {
     const res = await request(app).post('/api/v1/cardholders/lookup').send({});
-    expect(res.statusCode).toBe(422);
+    expect(res.statusCode).toBe(401);
   });
 
-  test('POST /api/v1/cardholders/ABCD001122HDFRRN07/account sin password devuelve 422', async () => {
+  test('POST /api/v1/cardholders/ABCD001122HDFRRN07/account devuelve 410', async () => {
     const res = await request(app)
       .post('/api/v1/cardholders/ABCD001122HDFRRN07/account')
       .send({ username: 'usuario.tj' });
-    expect(res.statusCode).toBe(422);
+    expect(res.statusCode).toBe(410);
+  });
+
+  test('DELETE /api/v1/beneficiarios-staging/expired permite dryRun admin', async () => {
+    const res = await request(app)
+      .delete('/api/v1/beneficiarios-staging/expired?dryRun=true')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('dryRun', true);
   });
 });

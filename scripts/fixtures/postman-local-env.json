@@ -1,0 +1,23 @@
+{
+  "base_url": "http://127.0.0.1:8081",
+  "mock_base_url": "http://127.0.0.1:9091",
+  "sys_ipj_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InN5c19pcGotcG9zdG1hbi1sb2NhbCJ9.eyJpc3MiOiJzeXNfaXBqIiwic3ViIjoic3lzX2lwaiIsImF1ZCI6ImFwaV90aiIsImp0aSI6ImE2ZmU3MzU4LTI3YzgtNDkwMC1iNTQ1LTZlODY4YjU0MDA2ZiIsInNjb3BlIjoiY2FyZGhvbGRlcnMuc3luYyIsImlhdCI6MTc3Njk2MjkwNSwiZXhwIjoxNzc2OTYzODA1fQ.OWiwQfRcOMx3iw2NG7nH-3f4XIh0SqEUVCCu8rvPylp62AeWam01Sqcfllp-lDhcX6zalfGEDFfwMyawwzo6BS4j02dr1EE2SUsWxOqirUcb0wNwoDYND5ZlWPcMSRb4FGIy66g4cnc7J9iLtwt8jf6GxIJ8kjDHTxdq75KyjdKuHqFIQSrZt4bO9mSOKPrRZ3Gc1kDuU-HtPwe4_MTcouUv85gCMTW_N7qbgnpUMUkXp_7I3evFPgyt9Ot4RlED8GPr5f9p6McKkgoK_UTuqWv76AWiKsVpnhQgtX7Kb5GvsrdOtZgWDXEfun-ZQwL3fRVG61RoHhb67P6QkB-bfg",
+  "informatica_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InVuaWRhZF9pbmZvcm1hdGljYS1wb3N0bWFuLWxvY2FsIn0.eyJpc3MiOiJ1bmlkYWRfaW5mb3JtYXRpY2EiLCJzdWIiOiJ1bmlkYWRfaW5mb3JtYXRpY2EiLCJhdWQiOiJhcGlfdGoiLCJqdGkiOiI4ZjE2OTFmZS0yYjdkLTQ2ZDctYmU4NS1kMTY0YzJjZTUyNWIiLCJzY29wZSI6ImNhcmRob2xkZXJzLmxvb2t1cCBiZW5lZmljaWFyaW9zLnN0YWdpbmcuY3JlYXRlIiwiaWF0IjoxNzc2OTYyOTA1LCJleHAiOjE3NzY5NjM4MDV9.TSLh6Lb9-y3_Vv_voLYX1EbsdE_IJZOHRkXFPf2PBF_kquM2qjzr9Sn3IyvLGfZeaZmCKCqe5uNzsGGDeUYGI7O-8Ai0UJewu4x60YoXLaUHsWaRB46Snpp3FdC1suLjFIBuvakNcxFoWhYCUwmjE2QHeNG0qcWPNpUGEL3PgZuhjPLMFPR-wSOAXMpSh1zj5yvIa2mf0seNEDL7v7hmP3cKL0O1M0lrF0BAQLP88T5bSjZk5lp09BIO_3nCz5qVhNIb7fWLV9i1Rot0L9bhqr7NCet2unvzwoXzanQoh7PQJptq1khBHctS5sBJodtx0FznlyN4tkU4YJ-8S_oprA",
+  "admin_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNzc2OTYyOTA1LCJleHAiOjE3NzY5NjQ3MDV9.rDnl5dOCHpNGkXRJtKQi44aEGbR5x1GZvFFQ82JnQk0",
+  "sync_id": "SYNC-1776962905592",
+  "staging_id": "",
+  "staging_external_request_id": "",
+  "staging_external_request_id_missing": "",
+  "staging_curp_new": "",
+  "staging_curp_missing": "",
+  "integration_token": "",
+  "tarjeta_numero_ok": "TJ-0080",
+  "tarjeta_numero_alt": "TJ-0080-ALT",
+  "tarjeta_numero_bad": "TJ-4040",
+  "curp_ok": "MELR000202MSPSRD06",
+  "curp_bad": "XEXX010101HNEXXXA8",
+  "curp_hash_ok": "de2a2e327878455e0c176c891b5aa9a2fb0f2871b84d6a84a8a5022e41bb4b9a",
+  "curp_masked_ok": "MELR************06",
+  "auth0_id_token_ok": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im1vY2stYXV0aDAta2lkIn0.eyJpc3MiOiJodHRwOi8vaG9zdC5kb2NrZXIuaW50ZXJuYWw6OTA5MS9hdXRoMC8iLCJzdWIiOiJhdXRoMHxwb3N0bWFuLWxvY2FsLXVzZXIiLCJhdWQiOiJwb3N0bWFuLWxvY2FsLWNsaWVudCIsImVtYWlsIjoicG9zdG1hbi5sb2NhbEBleGFtcGxlLmNvbSIsImlhdCI6MTc3Njk2MjkwNSwiZXhwIjoxNzc2OTYzODA1fQ.OV_S8sPxqk8B45hwahmQdhxx39h3wFDEqPgR6jqQ3FnjjSLOT8tIeV1ekIcKwP3d1eenourqCSKuBwFME6exYbO89frnzwk-x5BsRnvmXBHv35fw7YinT3HILtufq3BWi6T3ikWXhT514EEtwBET0Z0q8833aqK93Y5XIPum7vGGemysYgyTYNoYZ9s1eKglaLJ0PHdcMARScKMrFxZGbvTbREdwVVQfRZ_FUaxo2irpsapTjDyYiSHx8-p6SuLTiXQQf4ampThXCmb-SDKgZeRom-rIkJ8QnYWslg3_qvq-pmFokfKi5AkOt9JztSHsGX71pG-rf6JCd2UYeiHX7A",
+  "auth0_id_token_bad": "bad.mock.token"
+}

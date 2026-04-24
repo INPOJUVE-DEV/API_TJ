@@ -1,192 +1,148 @@
 # Backend API - Tarjeta Joven
 
-API de referencia para el programa Tarjeta Joven. Expone flujos de autenticacion (password y OTP), consulta de catalogos, registro de ciudadanos sin tarjeta fisica y vinculacion de tarjetas ya emitidas sobre Node.js + Express + MySQL.
+API Node.js + Express + MySQL para Tarjeta Joven. Mantiene autenticacion local para usuarios internos y compatibilidad, y agrega el flujo nuevo de padron minimo sincronizado, staging cifrado de beneficiarios, push manual a Sys_IPJ y activacion con Auth0.
 
 ## Caracteristicas clave
 
-- Autenticacion basada en JWT con refresh tokens persistidos en `refresh_tokens`.
-- Flujo OTP autodocumentado controlado por `OTP_DEBUG` (solo devuelve el codigo cuando esta activo) y auditoria en `cardholder_audit_logs`.
-- Registro multipart/form-data con validaciones reforzadas de CURP (incluyendo consistencia con la fecha de nacimiento y limite de edad de 29 años cumplidos al momento del tramite), direccion y campos personales. Los documentos adjuntos ya no son obligatorios.
-- Catalogo de beneficios filtrable por municipio, categoria y texto libre.
-- Script de seed que crea el esquema completo y datos de prueba consistentes.
+- Padron minimo en `cardholders_sync`; los flujos nuevos usan `curp_hash` y no consultan `cardholders.curp`.
+- Integraciones sistema-a-sistema con JWT RS256, `kid`, scopes, clientes separados y anti-replay por `jti`.
+- Staging temporal de beneficiarios con payload cifrado AES-256-GCM.
+- Push manual a Sys_IPJ con `external_request_id` como llave idempotente.
+- Activacion de cuenta con Auth0: API_TJ valida el ID token por JWKS y guarda el vinculo local.
+- Login local por email, QR, catalogo y roles internos se conservan para compatibilidad.
 
 ## Arquitectura rapida
 
 | Componente | Descripcion |
 |------------|-------------|
-| `src/index.js` | Inicializa Express, CORS y monta las rutas versionadas bajo `/api/v1`. |
-| `src/config/db.js` | Pool MySQL (`mysql2/promise`) reutilizado por los controladores. |
-| `src/routes/*` | Define routers por dominio (`auth`, `user`, `catalog`, `register`, `cardholders`). |
-| `src/controllers/*` | Logica de cada flujo: tokens, OTP, catalogo, registro y cardholders. |
-| `src/middleware/auth.js` | Middleware que valida JWT y expone `req.user`. |
-| `scripts/seed.js` | Asegura el esquema y siembra municipios, categorias, beneficios, usuarios, cardholders y solicitudes. |
-| `uploads/` | Carpeta default para adjuntos del registro (configurable via `UPLOADS_DIR`). |
-| `tests/` | Base para pruebas Jest + Supertest. |
+| `src/index.js` | Inicializa Express, CORS y monta rutas bajo `/api/v1`. |
+| `src/routes/*` | Routers por dominio: `auth`, `user`, `catalog`, `register`, `cardholders`, `beneficiarios-staging`, `qr`. |
+| `src/controllers/*` | Controladores de autenticacion, catalogo, cardholders, staging, QR y usuarios. |
+| `src/services/*` | Hash CURP, cifrado, Auth0, auditoria, integracion RS256 y cliente Sys_IPJ. |
+| `src/middleware/*` | JWT local, roles, rate limit y autenticacion de integracion. |
+| `scripts/seed.js` | Asegura esquema, datos de prueba, clientes de integracion y backfill de `cardholders_sync`. |
+| `tests/` | Pruebas Jest + Supertest. |
 
-## Requisitos previos
-
-- Node.js 22.x y npm 10.x (solo si ejecutaras fuera de Docker).
-- Docker Desktop (o Docker Engine + Docker Compose v2) para usar el stack incluido.
-- Instancia MySQL 8 si decides no usar el contenedor `db` del compose.
-
-## Configuracion de variables de entorno
-
-1. Copia el archivo de ejemplo: `cp .env.example .env`.
-2. Ajusta los valores segun tu entorno (ver tabla). Si usas Docker apunta `DB_HOST=db`.
-3. Define `JWT_SECRET` y `JWT_EXPIRATION` acorde a tus politicas.
+## Variables de entorno principales
 
 | Variable | Descripcion | Valor sugerido |
 |----------|-------------|----------------|
 | `PORT` | Puerto del API. | `8080` |
 | `FRONTEND_ORIGIN` | Origen permitido en CORS. | `http://localhost:3000` |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales MySQL. | Usa `db` y las credenciales del compose si estas en Docker. |
-| `DB_URI` | Alternativa para definir la conexion en una sola cadena. | `mysql://user:pass@host:3306/tarjeta_joven` |
-| `JWT_SECRET` | Clave para firmar tokens. | Cadena aleatoria y larga. |
-| `JWT_EXPIRATION` | Tiempo de vida del access token. | `15m` (o lo que prefieras). |
-| `OTP_DEBUG` | Devuelve el OTP en la respuesta (solo para QA). | `false` |
-| `EXPOSE_PII` | Devuelve CURP/telefono completos en respuestas. | `false` |
-| `QR_TOKEN_BYTES` | Longitud en bytes del token QR. | `16` |
-| `QR_PREFIX` | Prefijo del QR para el beneficiario. | `TJ1` |
-| `COIN_REWARD_PER_SCAN` | Creditos otorgados por scan diario. | `1` |
-| `UPLOADS_DIR` | Directorio donde se guardan los archivos subidos (multer). | `uploads/` |
-| `BENEFICIARIOS_CACHE_URL` | Endpoint central para cachear beneficiarios. | `https://central/api/v1/beneficiarios/cache` |
-| `BENEFICIARIOS_CACHE_JWT_SECRET` | Secreto JWT para autenticar el envio. | Cadena aleatoria y larga. |
-| `BENEFICIARIOS_CACHE_JWT_TTL` | Expiracion del JWT de envio. | `365d` o `none`. |
-| `BENEFICIARIOS_CACHE_SOURCE` | Valor fijo de `source` en el payload. | `api-externa` |
-| `BENEFICIARIOS_CACHE_TIMEOUT_MS` | Timeout en milisegundos para el envio. | `8000` |
-| `SEED_ON_START` | Controla el seed automatico en `start:render`. | `true` en desarrollo; `false` en produccion. |
-| `ALLOW_PROD_SEED` | Permite ejecutar `scripts/seed.js` en produccion. | `false` |
-| `SEED_*_PASSWORD` | Passwords para usuarios/solicitudes del seed. | Solo si necesitas override. |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Credenciales MySQL. | Usa `db` en Docker. |
+| `DB_URI` | Conexion MySQL en una sola cadena. | `mysql://user:pass@host:3306/tarjeta_joven` |
+| `JWT_SECRET` | Clave para JWT local interno. | Cadena larga y aleatoria. |
+| `JWT_EXPIRATION` | Vida del access token local. | `15m` |
+| `CURP_HASH_SECRET` | Secreto HMAC-SHA-256 para `curp_hash`. | Cadena larga y aleatoria. |
+| `FIELD_ENCRYPTION_KEY` | Llave de cifrado para staging. | 32 bytes base64/hex o cadena larga. |
+| `FIELD_ENCRYPTION_ALGORITHM` | Algoritmo de cifrado. | `aes-256-gcm` |
+| `INTEGRATION_JWT_AUDIENCE` | `aud` esperado en JWT RS256 de integracion. | `api_tj` |
+| `INTEGRATION_RATE_WINDOW_MS` | Ventana de rate limit por cliente integrador y ruta. | `900000` |
+| `INTEGRATION_RATE_MAX` | Maximo de llamadas por cliente integrador/ruta dentro de la ventana. | `300` |
+| `SYS_IPJ_PUSH_URL` | Endpoint de Sys_IPJ para push manual. | URL de integracion. |
+| `SYS_IPJ_JWT_PUBLIC_KEY` | Llave publica inicial de `sys_ipj` para seed. | PEM publico. |
+| `INFORMATICA_JWT_PUBLIC_KEY` | Llave publica inicial de `unidad_informatica` para seed. | PEM publico. |
+| `AUTH0_DOMAIN` | Dominio Auth0 usado como issuer. | `tu-tenant.us.auth0.com` |
+| `AUTH0_CLIENT_ID` | Audience esperado del ID token Auth0. | Client ID de la app. |
+| `STAGING_TTL_DAYS` | Retencion operativa de staging `pending`/`error`. | `30` |
+| `OTP_DEBUG` | Variable legacy; OTP por CURP esta retirado. | `false` |
+| `EXPOSE_PII` | Solo aplica a endpoints legacy; flujos nuevos no devuelven CURP completo. | `false` |
+| `SEED_ON_START`, `ALLOW_PROD_SEED`, `SEED_*_PASSWORD` | Controlan seed automatico y passwords de datos demo. | Segun entorno. |
 
-## Ejecucion local (sin Docker)
+Las variables `BENEFICIARIOS_CACHE_*` quedan como compatibilidad legacy; los flujos nuevos usan staging y `SYS_IPJ_PUSH_URL`.
+
+## Ejecucion local
 
 ```bash
 npm install
 npm run dev
 ```
 
-Necesitas un servidor MySQL accesible y las variables del `.env` apuntando a dicha instancia.
+Necesitas MySQL accesible y variables `.env` configuradas. Con Docker:
 
-## Deploy en Render (sin Docker)
+```bash
+docker compose up -d --build
+```
 
-- El filesystem es efimero: no asumas que `uploads/` persiste entre deploys/restarts.
-- Recomendado: usar storage externo (S3 / Cloudflare R2) y guardar solo la URL/metadata en la BD.
-- Alternativa: usar Render Disk y apuntar `UPLOADS_DIR` a un path persistente, por ejemplo `UPLOADS_DIR=/data/uploads`.
-
-## Ejecucion con Docker
-
-1. Asegura que `.env` exista en la raiz.
-2. Levanta los servicios:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. Verifica el estado (`docker compose ps`) y sigue logs cuando lo necesites (`docker compose logs -f api`).
-4. Para apagar el stack: `docker compose down` (agrega `-v` si quieres borrar el volumen `db_data`).
-
-## Base de datos y datos de ejemplo
-
-`scripts/seed.js` crea todas las tablas (`usuarios`, `cardholders`, `solicitudes_registro`, `beneficios`, `otp_codes`, etc.) y carga catalogos + casos de prueba. En produccion esta deshabilitado por defecto; para forzarlo define `ALLOW_PROD_SEED=true` y configura los `SEED_*_PASSWORD`.
+## Base de datos y seed
 
 ```bash
 npm run seed
-# o si el stack Docker ya esta corriendo
-docker compose exec api node scripts/seed.js
+# o
+npm run db:ensure
 ```
 
-El script es idempotente y usa las credenciales del `.env`. En desarrollo usa passwords por defecto; en produccion debes definir `SEED_*_PASSWORD`. Cuentas y recursos precargados:
+`scripts/seed.js` es idempotente y crea, entre otras, las tablas `cardholders_sync`, `beneficiario_staging`, `sync_audit_log`, `service_clients`, `service_client_keys`, `integration_jti_log` y `staging_push_attempts`. Tambien hace backfill controlado desde los tarjetahabientes de ejemplo hacia `cardholders_sync`.
 
-| Alias | Email | CURP | Password | Municipio | Telefono |
-|-------|-------|------|----------|-----------|----------|
-| Ana | `ana.hernandez@example.com` | `HERL020101MBCNRZ01` | `Test1234!` | Tijuana | 6641234567 |
-| Carlos | `carlos.lopez@example.com` | `LOMC990505HBCLPM02` | `Secret456!` | Mexicali | 6869876543 |
-| Maria | `maria.soto@example.com` | `SOAM010910MBCSGR03` | `Password789!` | Ensenada | 6465551122 |
-
-Tarjetahabientes relevantes:
-
-- `MELR000202MBCSRD06`: activo sin cuenta (usa este para probar `lookup` + `account`).
-- `HERL020101MBCNRZ01`: activo con cuenta (responde `409` en lookup).
-- `SAQP950101HBCQRP07`: tarjeta inactiva (responde `404`).
-
-Solicitudes iniciales (`solicitudes_registro`): `SAQF030415MBCSLQ04` (pending) y `CATL021102HBCCMT05` (approved).
-
-## Flujos expuestos y forma de invocarlos
-
-Todos los endpoints estan versionados bajo `/api/v1`. A continuacion un resumen; revisa `readme_postman.md` para los payloads completos y scripts de pruebas.
-
-### Autenticacion estandar
-
-- `POST /auth/login` recibe `{ "username": "<email o curp>", "password": "<password>" }` y regresa `accessToken` + `refreshToken`.
-- `POST /auth/logout` (Bearer token) elimina los refresh tokens asociados.
+Para simular inyeccion de padron por integracion:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"ana.hernandez@example.com","password":"Test1234!"}'
+npm run fixture:cardholders-sync
+npm run inject:cardholders-sync
 ```
 
-### Autenticacion con OTP
+El primer comando transforma `scripts/fixtures/cardholders-sync-source.sample.json` a un payload listo para `/api/v1/cardholders/sync` usando tu `CURP_HASH_SECRET`. El segundo genera un JWT RS256 temporal para `sys_ipj`, registra la llave publica en `service_client_keys` y envia el payload al API local.
 
-- `POST /auth/otp/send` genera un codigo de 6 digitos valido por 5 minutos. Solo devuelve el OTP en la respuesta si `OTP_DEBUG=true`.
-- `POST /auth/otp/verify` valida `curp` + `otp` y emite tokens nuevos.
+Datos demo principales:
 
-### Perfil de usuario
+| Alias | Email | CURP legacy | Password | Rol |
+|-------|-------|-------------|----------|-----|
+| Ana | `ana.hernandez@example.com` | `HERL020101MSPNRZ01` | `Test1234!` | `admin` |
+| Carlos | `carlos.lopez@example.com` | `LOMC990505HSPLPM02` | `Secret456!` | `reader` |
+| Maria | `maria.soto@example.com` | `SOAM010910MSPSGR03` | `Password789!` | `reader` |
 
-- `GET /me` requiere `Authorization: Bearer <accessToken>` y devuelve perfil + `barcodeValue` (formato `TJ1-<token>-YYYYMM`), `creditos`, `edad`, `fotoUrl`, `portadaUrl`. El `telefono` se enmascara salvo que `EXPOSE_PII=true`.
+Tarjetahabientes sincronizados:
 
-### QR y recompensas
+- `MELR000202MSPSRD06`: activo sin cuenta, util para lookup y activacion.
+- `HERL020101MSPNRZ01`: activo con cuenta legacy asociada.
+- `SAQP950101HSPQRP07`: inactivo.
 
-- `POST /qr/scan` (Bearer token, role `scanner` o `admin`) recibe `{ "barcodeValue": "TJ1-<token>-YYYYMM" }` y registra 1 credito diario por usuario. El token rota por mes. Responde `awarded`, `creditos` y `delta` cuando aplica.
+## Flujos principales
 
-### Catalogo de beneficios
+### Autenticacion interna
 
-- `GET /catalog` (Bearer token, role `admin` o `reader`) admite filtros `municipio`, `categoria`, `q` y paginacion (`page`, `pageSize`). Responde con `{ items, total, page, pageSize, totalPages }`.
-- `GET /catalog/{id}` (Bearer token, role `admin` o `reader`) devuelve un beneficio por id.
-- `POST /catalog` (Bearer token, role `admin`) crea un beneficio. Campos: `nombre`, `descripcion`, `descuento`, `direccion`, `horario`, `lat`, `lng`, `categoriaId`/`categoria`, `municipioId`/`municipio`.
-- `PUT /catalog/{id}` (Bearer token, role `admin`) actualiza campos del beneficio.
-- `DELETE /catalog/{id}` (Bearer token, role `admin`) elimina un beneficio.
+- `POST /api/v1/auth/login`: login local por email y password.
+- `POST /api/v1/auth/logout`: elimina refresh tokens.
+- `POST /api/v1/auth/otp/send` y `/otp/verify`: flujo OTP retirado, responde `410 Gone`.
 
-### Vinculacion de tarjeta fisica
+### Perfil
 
-- `POST /cardholders/lookup`: valida CURP, aplica rate limit (5 intentos en 15 minutos) y abre una ventana de 15 minutos para crear cuenta (`pending_account_until`). Devuelve `curpMasked` y solo expone `curp` con `EXPOSE_PII=true`.
-- `POST /cardholders/{curp}/account`: crea un usuario usando los datos del cardholder si la ventana sigue vigente y el username cumple el regex (`^[A-Za-z0-9._-]{4,50}$`).
+- `GET /api/v1/me`: requiere JWT local. Funciona con usuarios Auth0 porque usa `auth0_user_id` y `cardholder_sync_id`; no depende de CURP ni de `password_hash`.
 
-### Registro de ciudadanos sin tarjeta
+### Integraciones
 
-- `POST /register` (alias `POST /register/register`) recibe multipart/form-data con los campos personales. Los archivos `ine`, `comprobante` y `curpDoc` son ahora opcionales y no se requieren para crear la solicitud; si se envian, se siguen eliminando cuando ocurre un error de validacion.
-- Al crear la solicitud se envia (sincrono) el payload al endpoint central `POST /api/v1/beneficiarios/cache`. La respuesta esperada es solo conteos: `{ "total": 1, "inserted": 1, "rejected": 0 }`. El estatus del envio se guarda en `beneficiarios_sync_log` para inserciones manuales.
-- La respuesta incluye `syncStatus` con el estado del envio (`success`/`failed`/`queued` segun aplique).
+- `POST /api/v1/cardholders/sync`: requiere cliente `sys_ipj` con scope `cardholders.sync`. Hace upsert por `curp_hash`.
+- `POST /api/v1/cardholders/lookup`: requiere cliente `unidad_informatica` con scope `cardholders.lookup`. Recibe CURP, calcula hash y responde solo `registered`, `message`, `folio_tarjeta`.
+- `POST /api/v1/beneficiarios-staging`: requiere scope `beneficiarios.staging.create`. Valida expediente, cifra payload y crea staging `pending`.
 
-## Probar el API con Postman
+Los JWT de integracion deben usar RS256, `kid`, `iss`, `sub`, `aud`, `iat`, `exp`, `jti` y `scope`. El `iss` debe coincidir con `service_clients.client_code`; `kid` debe existir en `service_client_keys`. Las llamadas autorizadas se auditan en `integration_audit_log` sin guardar cuerpos ni CURP.
 
-Consulta `readme_postman.md` para la guia paso a paso: configuracion de entorno, scripts de tests y dataset de referencia que coincide con `scripts/seed.js`.
+### Administracion interna
 
-## Scripts utiles
+- `GET /api/v1/beneficiarios-staging?status=pending`: requiere JWT local y rol `admin`; no devuelve payload sensible.
+- `POST /api/v1/beneficiarios-staging/{id}/push`: requiere JWT local y rol `admin`; bloquea el registro, descifra payload, envia a Sys_IPJ y audita.
+- `DELETE /api/v1/beneficiarios-staging/expired?dryRun=true`: requiere JWT local y rol `admin`; elimina solo `pending/error` expirados, sin lock y fuera de proceso.
 
-- `npm run dev`: modo desarrollo con recarga automatica (`nodemon`).
-- `npm start`: arranque en modo produccion (el comando usado por el contenedor `api`).
-- `npm test`: ejecuta Jest con la base mockeada.
-- `npm run seed`: crea/actualiza las tablas minimas y datos de ejemplo.
-- `npm run db:ensure`: verifica y actualiza el esquema sin insertar datos.
+### Activacion Auth0
 
-## Endpoints principales
+- `POST /api/v1/cardholders/verify-activation`: valida `tarjeta_numero + curp` contra `cardholders_sync`.
+- `POST /api/v1/cardholders/complete-activation`: recibe `tarjeta_numero` y `auth0_id_token`; exige una verificacion reciente de `tarjeta_numero + curp`, valida firma, issuer, audience `AUTH0_CLIENT_ID` y subject, y vincula `auth0_user_id`.
+- `POST /api/v1/cardholders/{curp}/account`: flujo legacy retirado, responde `410 Gone`.
+- `POST /api/v1/register`: flujo legacy retirado, responde `410 Gone`; el alta nueva debe entrar por staging.
 
-Todos los endpoints estan versionados bajo `/api/v1`:
+## Seguridad y privacidad
 
-- `POST /auth/login`
-- `POST /auth/logout`
-- `POST /auth/otp/send`
-- `POST /auth/otp/verify`
-- `GET /me`
-- `POST /qr/scan`
-- `GET /catalog`
-- `GET /catalog/{id}`
-- `POST /catalog`
-- `PUT /catalog/{id}`
-- `DELETE /catalog/{id}`
-- `POST /register`
-- `POST /cardholders/lookup`
-- `POST /cardholders/{curp}/account`
+- Ningun flujo nuevo debe usar `cardholders.curp` para lookup, matching o activacion.
+- Lookup nunca devuelve nombres, domicilio, CURP completo ni `curp_masked`.
+- Los logs nuevos pasan por sanitizacion para evitar CURP completo.
+- `pending` y `error` pueden limpiarse por TTL solo si no estan bloqueados ni en proceso; `accepted` y `rejected` se conservan para auditoria.
 
-> Mantener `readme_postman.md` junto a tu coleccion exportada ayuda a documentar respuestas, variables y datos de prueba compartidos con el equipo.
+## Pruebas
+
+```bash
+npm test
+```
+
+La suite cubre carga basica de API, endpoint legacy `410`, servicios de hash/cifrado/sanitizacion y validacion RS256 con `kid`, scope y `jti`.
+
+Consulta `readme_postman.md` para ejemplos de payloads.
