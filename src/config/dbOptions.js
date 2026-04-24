@@ -24,6 +24,10 @@ function looksLikeTiDbCloudHost(host = '') {
   return /(^|\.)tidbcloud\.com$/i.test(String(host).trim());
 }
 
+function looksLikeRailwayInternalHost(host = '') {
+  return /(^|\.)railway\.internal$/i.test(String(host).trim());
+}
+
 function parseMysqlUri(uri) {
   const url = new URL(uri);
   if (!['mysql:', 'mysqls:'].includes(url.protocol)) {
@@ -66,6 +70,14 @@ function readCertificate(env) {
 }
 
 function getSslConfig(env, connectionConfig) {
+  const isRailwayMySql =
+    Boolean(env.MYSQL_URL || env.MYSQLHOST || env.MYSQLPORT) ||
+    looksLikeRailwayInternalHost(connectionConfig.host);
+
+  if (isRailwayMySql) {
+    return undefined;
+  }
+
   const sslEnabled = parseBoolean(
     env.DB_SSL ?? env.DB_SSL_ENABLED ?? env.TIDB_ENABLE_SSL,
     connectionConfig.protocol === 'mysqls:' || looksLikeTiDbCloudHost(connectionConfig.host)
@@ -137,5 +149,6 @@ function getDbConfig(env = process.env) {
 module.exports = {
   getDbConfig,
   looksLikeTiDbCloudHost,
+  looksLikeRailwayInternalHost,
   parseBoolean
 };
