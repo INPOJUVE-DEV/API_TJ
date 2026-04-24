@@ -2,6 +2,7 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
+const { getDbConfig } = require('../src/config/dbOptions');
 const { buildCurpLookup } = require('../src/services/curpHashService');
 
 const NODE_ENV = String(process.env.NODE_ENV || '').toLowerCase();
@@ -188,31 +189,6 @@ const SOLICITUDES = [
 ];
 
 const SALT_ROUNDS = 10;
-
-function getDbConfig() {
-  if (process.env.DB_URI) {
-    const uri = new URL(process.env.DB_URI);
-    const database = uri.pathname.replace('/', '');
-    return {
-      host: uri.hostname,
-      port: uri.port ? Number(uri.port) : 3306,
-      user: decodeURIComponent(uri.username),
-      password: decodeURIComponent(uri.password),
-      database,
-      waitForConnections: true,
-      connectionLimit: 10
-    };
-  }
-  return {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'tarjeta_joven',
-    waitForConnections: true,
-    connectionLimit: 10
-  };
-}
 
 async function ensureSchema(pool) {
   const ddlStatements = [

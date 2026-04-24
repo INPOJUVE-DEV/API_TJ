@@ -1,8 +1,11 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const db = require('./config/db');
+const { validateRuntimeConfig } = require('./config/runtimeConfig');
+const safeLogger = require('./utils/safeLogger');
+
+validateRuntimeConfig();
 
 const app = express();
 
@@ -44,7 +47,7 @@ const PORT = process.env.PORT || 8080;
 if (require.main === module) {
   // Inicia el servidor solo si este archivo se ejecuta directamente
   app.listen(PORT, () => {
-    console.log(`API escuchando en puerto ${PORT}`);
+    safeLogger.info(`API escuchando en puerto ${PORT}`);
   });
 }
 

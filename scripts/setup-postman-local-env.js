@@ -4,27 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
+const { getDbConfig } = require('../src/config/dbOptions');
 const { buildCurpLookup } = require('../src/services/curpHashService');
-
-function getDbConfig() {
-  if (process.env.DB_URI) {
-    const url = new URL(process.env.DB_URI);
-    return {
-      host: url.hostname,
-      port: url.port ? Number(url.port) : 3306,
-      user: decodeURIComponent(url.username || ''),
-      password: decodeURIComponent(url.password || ''),
-      database: url.pathname.replace(/^\//, '')
-    };
-  }
-  return {
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'tarjeta_joven'
-  };
-}
 
 function generateIntegrationKey(clientCode) {
   const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });

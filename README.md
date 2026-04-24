@@ -145,4 +145,13 @@ npm test
 
 La suite cubre carga basica de API, endpoint legacy `410`, servicios de hash/cifrado/sanitizacion y validacion RS256 con `kid`, scope y `jti`.
 
+## Deploy en Railway con TiDB
+
+- El repo incluye `.env.example` para importar variables sugeridas y `railway.toml` para fijar `healthcheck`, `start` y `preDeploy`.
+- El servicio escucha `process.env.PORT` y expone `GET /health`, que Railway usa para healthchecks.
+- Para preparar esquema antes de levantar la API, Railway ejecuta `npm run railway:predeploy`.
+- La configuracion de base de datos soporta `DB_URI` o variables separadas `DB_*` / `TIDB_*`.
+- Si el host parece de TiDB Cloud o si defines `TIDB_ENABLE_SSL=true`, el cliente activa TLS para `mysql2`.
+- `CURP_HASH_SECRET` y `FIELD_ENCRYPTION_KEY` son obligatorios al arranque; define esos valores antes del primer deploy productivo y no los cambies despues.
+
 Consulta `readme_postman.md` para ejemplos de payloads.

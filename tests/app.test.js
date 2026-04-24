@@ -2,6 +2,8 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+process.env.CURP_HASH_SECRET = process.env.CURP_HASH_SECRET || 'curp-test-secret';
+process.env.FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || 'field-test-secret';
 
 // Mockear la capa de base de datos para no depender de MySQL en las pruebas
 jest.mock('../src/config/db', () => {

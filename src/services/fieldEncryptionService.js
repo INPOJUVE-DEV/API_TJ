@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { getRequiredEnv } = require('../config/runtimeConfig');
 
 const DEFAULT_ALGORITHM = 'aes-256-gcm';
 
@@ -11,10 +12,7 @@ function getAlgorithm() {
 }
 
 function getKey() {
-  const raw = process.env.FIELD_ENCRYPTION_KEY || process.env.JWT_SECRET;
-  if (!raw) {
-    throw new Error('FIELD_ENCRYPTION_KEY es obligatorio');
-  }
+  const raw = getRequiredEnv('FIELD_ENCRYPTION_KEY');
 
   if (/^[a-f0-9]{64}$/i.test(raw)) {
     return Buffer.from(raw, 'hex');

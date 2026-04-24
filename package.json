@@ -9,6 +9,7 @@
     "test": "jest",
     "seed": "node scripts/seed.js",
     "db:ensure": "node scripts/ensure-schema.js",
+    "railway:predeploy": "node scripts/ensure-schema.js",
     "seed:if-needed": "node scripts/seed-if-needed.js",
     "fixture:cardholders-sync": "node scripts/build-cardholders-sync-fixture.js",
     "inject:cardholders-sync": "node scripts/inject-cardholders-sync.js",
