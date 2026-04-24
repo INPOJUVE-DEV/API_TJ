@@ -97,20 +97,21 @@ function getSslConfig(env, connectionConfig) {
 }
 
 function resolveBaseConnection(env) {
-  if (env.DB_URI) {
-    return parseMysqlUri(env.DB_URI);
+  const connectionUri = env.DB_URI || env.MYSQL_URL;
+  if (connectionUri) {
+    return parseMysqlUri(connectionUri);
   }
 
-  const host = env.DB_HOST || env.TIDB_HOST || 'localhost';
+  const host = env.DB_HOST || env.MYSQLHOST || env.TIDB_HOST || 'localhost';
   const defaultPort = env.TIDB_HOST || looksLikeTiDbCloudHost(host) ? 4000 : 3306;
 
   return {
     protocol: 'mysql:',
     host,
-    port: parseInteger(env.DB_PORT || env.TIDB_PORT, defaultPort),
-    user: env.DB_USER || env.TIDB_USER || 'root',
-    password: env.DB_PASSWORD || env.TIDB_PASSWORD || '',
-    database: env.DB_NAME || env.TIDB_DATABASE || 'tarjeta_joven'
+    port: parseInteger(env.DB_PORT || env.MYSQLPORT || env.TIDB_PORT, defaultPort),
+    user: env.DB_USER || env.MYSQLUSER || env.TIDB_USER || 'root',
+    password: env.DB_PASSWORD || env.MYSQLPASSWORD || env.TIDB_PASSWORD || '',
+    database: env.DB_NAME || env.MYSQLDATABASE || env.TIDB_DATABASE || 'tarjeta_joven'
   };
 }
 
