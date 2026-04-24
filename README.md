@@ -40,8 +40,14 @@ API Node.js + Express + MySQL para Tarjeta Joven. Mantiene autenticacion local p
 | `INTEGRATION_RATE_WINDOW_MS` | Ventana de rate limit por cliente integrador y ruta. | `900000` |
 | `INTEGRATION_RATE_MAX` | Maximo de llamadas por cliente integrador/ruta dentro de la ventana. | `300` |
 | `SYS_IPJ_PUSH_URL` | Endpoint de Sys_IPJ para push manual. | URL de integracion. |
-| `SYS_IPJ_JWT_PUBLIC_KEY` | Llave publica inicial de `sys_ipj` para seed. | PEM publico. |
-| `INFORMATICA_JWT_PUBLIC_KEY` | Llave publica inicial de `unidad_informatica` para seed. | PEM publico. |
+| `SYS_IPJ_JWT_PUBLIC_KEY` | Llave publica de `sys_ipj` para bootstrap automatico. | PEM publico. |
+| `SYS_IPJ_JWT_KID` | `kid` activo de `sys_ipj`. | `sys_ipj-current` |
+| `SYS_IPJ_ALLOWED_SCOPES` | Scopes permitidos para `sys_ipj`. | `["cardholders.sync"]` |
+| `SYS_IPJ_IP_ALLOWLIST` | Allowlist opcional de IPs de `sys_ipj`. | `[]` |
+| `INFORMATICA_JWT_PUBLIC_KEY` | Llave publica de `unidad_informatica` para bootstrap automatico. | PEM publico. |
+| `INFORMATICA_JWT_KID` | `kid` activo de `unidad_informatica`. | `unidad_informatica-current` |
+| `INFORMATICA_ALLOWED_SCOPES` | Scopes permitidos para `unidad_informatica`. | `["cardholders.lookup","beneficiarios.staging.create"]` |
+| `INFORMATICA_IP_ALLOWLIST` | Allowlist opcional de IPs de `unidad_informatica`. | `[]` |
 | `AUTH0_DOMAIN` | Dominio Auth0 usado como issuer. | `tu-tenant.us.auth0.com` |
 | `AUTH0_CLIENT_ID` | Audience esperado del ID token Auth0. | Client ID de la app. |
 | `STAGING_TTL_DAYS` | Retencion operativa de staging `pending`/`error`. | `30` |
@@ -50,6 +56,7 @@ API Node.js + Express + MySQL para Tarjeta Joven. Mantiene autenticacion local p
 | `SEED_ON_START`, `ALLOW_PROD_SEED`, `SEED_*_PASSWORD` | Controlan seed automatico y passwords de datos demo. | Segun entorno. |
 
 Las variables `BENEFICIARIOS_CACHE_*` quedan como compatibilidad legacy; los flujos nuevos usan staging y `SYS_IPJ_PUSH_URL`.
+Si defines las llaves publicas de integracion, la API hace bootstrap automatico de `service_clients` y `service_client_keys` al arrancar, sin depender de `npm run seed`.
 
 ## Ejecucion local
 
@@ -150,9 +157,11 @@ La suite cubre carga basica de API, endpoint legacy `410`, servicios de hash/cif
 - El repo incluye `.env.example` para importar variables sugeridas y `railway.toml` para fijar `healthcheck`, `start` y `preDeploy`.
 - El servicio escucha `process.env.PORT` y expone `GET /health`, que Railway usa para healthchecks.
 - Para preparar esquema antes de levantar la API, Railway ejecuta `npm run railway:predeploy`.
+- Si defines `INFORMATICA_JWT_PUBLIC_KEY` y/o `SYS_IPJ_JWT_PUBLIC_KEY`, el arranque hace upsert automatico de esos clientes de integracion en la base.
 - La configuracion de base de datos soporta `DB_URI`, las variables nativas de Railway MySQL (`MYSQL_URL`, `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`) y tambien variables separadas `DB_*` / `TIDB_*`.
 - Si usas Railway MySQL, puedes conectar el servicio y definir `DB_URI=${{MySQL.MYSQL_URL}}` o simplemente dejar disponible `MYSQL_URL`.
 - Si el host parece de TiDB Cloud o si defines `TIDB_ENABLE_SSL=true`, el cliente activa TLS para `mysql2`.
 - `CURP_HASH_SECRET` y `FIELD_ENCRYPTION_KEY` son obligatorios al arranque; define esos valores antes del primer deploy productivo y no los cambies despues.
 
 Consulta `readme_postman.md` para ejemplos de payloads.
+Para la Unidad de Informatica, revisa tambien `docs/manual_unidad_informatica_consumo_api.md`.

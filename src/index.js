@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { validateRuntimeConfig } = require('./config/runtimeConfig');
 const safeLogger = require('./utils/safeLogger');
+const { bootstrapIntegrationClients } = require('./services/integrationClientBootstrapService');
 
 validateRuntimeConfig();
 
@@ -45,10 +46,17 @@ app.use('/api/v1/qr', qrRoutes);
 
 const PORT = process.env.PORT || 8080;
 if (require.main === module) {
-  // Inicia el servidor solo si este archivo se ejecuta directamente
-  app.listen(PORT, () => {
-    safeLogger.info(`API escuchando en puerto ${PORT}`);
-  });
+  (async () => {
+    try {
+      await bootstrapIntegrationClients();
+      app.listen(PORT, () => {
+        safeLogger.info(`API escuchando en puerto ${PORT}`);
+      });
+    } catch (error) {
+      safeLogger.error('Error al inicializar clientes de integracion', error);
+      process.exit(1);
+    }
+  })();
 }
 
 // Exporta la instancia de app para pruebas
