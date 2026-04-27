@@ -1,0 +1,23 @@
+{
+  "external_request_id": "UI-2026-04-26-0002",
+  "beneficiario": {
+    "curp": "MOCJ050521MSPNRL01",
+    "nombre": "JULIETA",
+    "apellido_paterno": "MORALES",
+    "apellido_materno": "CANO",
+    "fecha_nacimiento": "2005-05-21",
+    "sexo": "M",
+    "discapacidad": "false",
+    "id_ine": "INE123456",
+    "telefono": "4441234567",
+    "domicilio": {
+      "calle": "AV REVOLUCION",
+      "numero_ext": "321B",
+      "numero_int": null,
+      "colonia": "ZONA CENTRO",
+      "municipio_id": 1,
+      "codigo_postal": "22000",
+      "seccional": "001"
+    }
+  }
+}

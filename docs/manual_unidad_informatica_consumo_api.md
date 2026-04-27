@@ -296,6 +296,10 @@ Campo opcional:
 
 - `beneficiario.domicilio.numero_int`
 
+Nota:
+
+- `beneficiario.discapacidad` es obligatorio y debe enviarse como boolean JSON real: `true` o `false`
+
 ### Respuesta esperada
 
 HTTP `202`
@@ -313,7 +317,7 @@ HTTP `202`
 - `401`: token invalido
 - `403`: cliente sin scope `beneficiarios.staging.create`
 - `409`: la CURP ya existe en el padron sincronizado o ya existe un staging previo
-- `422`: falta un campo obligatorio o `municipio_id` no es entero positivo
+- `422`: falta un campo obligatorio, `municipio_id` no es entero positivo o `discapacidad` no llega como boolean
 - `500`: error interno
 
 ### Ejemplo cURL
@@ -443,14 +447,187 @@ async function validarYRegistrar(curp, expedienteCompleto) {
 - manejar `404` en lookup como un flujo esperado, no como fallo tecnico
 - reenviar a staging solo cuando el lookup haya confirmado que no existe registro
 
-## 10. Resumen rapido del contrato
+## 10. Pruebas manuales desde Postman
+
+Esta seccion sirve para probar manualmente los endpoints sin integrar todavia una API consumidora completa.
+
+### Paso 1. Crear un environment
+
+Crea un environment en Postman con estas variables:
+
+| Variable | Valor sugerido |
+|----------|----------------|
+| `baseUrl` | `https://tu-dominio/api/v1` |
+| `integrationToken` | vacio |
+| `curp` | `MELR000202MSPSRD06` |
+| `externalRequestId` | `UI-TEST-0001` |
+
+Si vas a probar produccion de Railway:
+
+```text
+baseUrl = https://apitj-production.up.railway.app/api/v1
+```
+
+### Paso 2. Obtener un JWT valido
+
+Para que Postman pueda consumir estos endpoints, primero necesitas un token RS256 valido firmado con la llave privada de `unidad_informatica`.
+
+Opciones recomendadas:
+
+1. Generarlo desde tu propia API consumidora.
+2. Generarlo con un script Node local.
+3. Pedir un token temporal al equipo que administra la llave privada.
+
+Luego pega el token en la variable:
+
+```text
+integrationToken
+```
+
+Importante:
+
+- usa un token nuevo si el anterior expira
+- no reutilices el mismo token demasiadas veces si tu flujo usa `jti` unico por request
+- el `kid` del token debe coincidir con `INFORMATICA_JWT_KID`
+
+### Paso 3. Crear el request de lookup
+
+En Postman crea una request:
+
+- Metodo: `POST`
+- URL: `{{baseUrl}}/cardholders/lookup`
+- Headers:
+  - `Authorization: Bearer {{integrationToken}}`
+  - `Content-Type: application/json`
+- Body `raw` tipo `JSON`:
+
+```json
+{
+  "curp": "{{curp}}"
+}
+```
+
+### Paso 4. Interpretar la respuesta de lookup
+
+Si la CURP existe:
+
+- HTTP `200`
+- respuesta esperada:
+
+```json
+{
+  "registered": true,
+  "message": "El usuario ya se encuentra registrado con la tarjeta TJ-0080",
+  "folio_tarjeta": "TJ-0080"
+}
+```
+
+Si la CURP no existe:
+
+- HTTP `404`
+- respuesta esperada:
+
+```json
+{
+  "registered": false,
+  "message": "La CURP no se encuentra registrada en la app"
+}
+```
+
+Si recibes:
+
+- `401`: el token no es valido o no corresponde a una llave registrada
+- `403`: el token no trae el scope `cardholders.lookup`
+- `422`: falta `curp` o llega vacia
+
+### Paso 5. Crear el request de staging
+
+Usa este request solo cuando `lookup` haya devuelto `404`.
+
+En Postman crea otra request:
+
+- Metodo: `POST`
+- URL: `{{baseUrl}}/beneficiarios-staging`
+- Headers:
+  - `Authorization: Bearer {{integrationToken}}`
+  - `Content-Type: application/json`
+- Body `raw` tipo `JSON`:
+
+```json
+{
+  "external_request_id": "{{externalRequestId}}",
+  "beneficiario": {
+    "curp": "MOCJ050521MSPNRL01",
+    "nombre": "JULIETA",
+    "apellido_paterno": "MORALES",
+    "apellido_materno": "CANO",
+    "fecha_nacimiento": "2005-05-21",
+    "sexo": "M",
+    "discapacidad": false,
+    "id_ine": "INE123456",
+    "telefono": "4441234567",
+    "domicilio": {
+      "calle": "AV REVOLUCION",
+      "numero_ext": "321B",
+      "numero_int": null,
+      "colonia": "ZONA CENTRO",
+      "municipio_id": 1,
+      "codigo_postal": "22000",
+      "seccional": "001"
+    }
+  }
+}
+```
+
+### Paso 6. Interpretar la respuesta de staging
+
+Si el expediente fue aceptado en staging:
+
+- HTTP `202`
+- respuesta esperada:
+
+```json
+{
+  "created": true,
+  "status": "pending",
+  "staging_id": 123
+}
+```
+
+Si recibes:
+
+- `401`: token invalido
+- `403`: el token no trae el scope `beneficiarios.staging.create`
+- `409`: la CURP ya existe o ya hay un staging previo
+- `422`: falta algun campo obligatorio o `discapacidad` no es boolean
+
+### Paso 7. Flujo sugerido de prueba
+
+Para una prueba funcional completa en Postman:
+
+1. Coloca `baseUrl`.
+2. Genera un token valido y guardalo en `integrationToken`.
+3. Ejecuta `POST /cardholders/lookup`.
+4. Si responde `200`, la prueba de consulta fue correcta.
+5. Si responde `404`, ejecuta `POST /beneficiarios-staging`.
+6. Verifica que staging responda `202`.
+
+### Paso 8. Recomendaciones para Postman
+
+- guarda `baseUrl` e `integrationToken` en un environment, no pegues el token en cada request
+- si estas probando produccion, usa una CURP real solo con autorizacion
+- cambia `externalRequestId` en cada prueba para evitar `409`
+- si el token expira, genera uno nuevo antes de repetir la llamada
+- si Railway ya tiene configurado el bootstrap por variables, no necesitas insertar clientes manualmente en DB
+
+## 11. Resumen rapido del contrato
 
 | Caso | Endpoint | Scope | Exito |
 |------|----------|-------|-------|
 | Validar si una CURP ya existe | `POST /api/v1/cardholders/lookup` | `cardholders.lookup` | `200` o `404` |
 | Enviar expediente temporal cuando no existe | `POST /api/v1/beneficiarios-staging` | `beneficiarios.staging.create` | `202` |
 
-## 11. Endpoints que no debe usar la Unidad de Informatica
+## 12. Endpoints que no debe usar la Unidad de Informatica
 
 - `POST /api/v1/register`
 - `GET /api/v1/beneficiarios-staging`

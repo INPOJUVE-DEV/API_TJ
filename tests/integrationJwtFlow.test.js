@@ -356,4 +356,79 @@ describe('Flujo completo de integracion con JWT RS256', () => {
     expect(response.statusCode).toBe(403);
     expect(response.body).toEqual({ message: 'Acceso denegado' });
   });
+
+  test('staging rechaza payload sin discapacidad obligatoria', async () => {
+    const stagingToken = makeToken(
+      'unidad_informatica',
+      'beneficiarios.staging.create',
+      'staging-jti-missing-discapacidad'
+    );
+
+    const response = await request(app)
+      .post('/api/v1/beneficiarios-staging')
+      .set('Authorization', `Bearer ${stagingToken}`)
+      .send({
+        external_request_id: 'UI-JWT-MISSING-DISCAPACIDAD',
+        beneficiario: {
+          nombre: 'Julieta',
+          apellido_paterno: 'Morales',
+          apellido_materno: 'Cano',
+          curp: 'MOCJ050521MSPNRL01',
+          fecha_nacimiento: '2005-05-21',
+          sexo: 'M',
+          id_ine: 'INE-LOCAL-001',
+          telefono: '4441234567',
+          domicilio: {
+            calle: 'Av. Revolucion',
+            numero_ext: '321B',
+            numero_int: '2',
+            colonia: 'Zona Centro',
+            municipio_id: 1,
+            codigo_postal: '22000',
+            seccional: '0001'
+          }
+        }
+      });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.body).toEqual({ message: 'discapacidad es obligatorio.' });
+  });
+
+  test('staging rechaza discapacidad con tipo invalido', async () => {
+    const stagingToken = makeToken(
+      'unidad_informatica',
+      'beneficiarios.staging.create',
+      'staging-jti-invalid-discapacidad'
+    );
+
+    const response = await request(app)
+      .post('/api/v1/beneficiarios-staging')
+      .set('Authorization', `Bearer ${stagingToken}`)
+      .send({
+        external_request_id: 'UI-JWT-INVALID-DISCAPACIDAD',
+        beneficiario: {
+          nombre: 'Julieta',
+          apellido_paterno: 'Morales',
+          apellido_materno: 'Cano',
+          curp: 'MOCJ050521MSPNRL01',
+          fecha_nacimiento: '2005-05-21',
+          sexo: 'M',
+          discapacidad: 'false',
+          id_ine: 'INE-LOCAL-001',
+          telefono: '4441234567',
+          domicilio: {
+            calle: 'Av. Revolucion',
+            numero_ext: '321B',
+            numero_int: '2',
+            colonia: 'Zona Centro',
+            municipio_id: 1,
+            codigo_postal: '22000',
+            seccional: '0001'
+          }
+        }
+      });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.body).toEqual({ message: 'discapacidad debe ser booleano.' });
+  });
 });

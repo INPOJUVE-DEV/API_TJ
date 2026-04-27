@@ -1,0 +1,335 @@
+{
+  "info": {
+    "name": "API_TJ USI Production",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Coleccion Postman para pruebas manuales de la Unidad de Informatica contra produccion. Solo incluye endpoints permitidos para el cliente unidad_informatica."
+  },
+  "item": [
+    {
+      "name": "01 Lookup",
+      "item": [
+        {
+          "name": "Lookup existente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 o 404', function () {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test('No expone CURP en claro', function () {",
+                  "  pm.expect(data.curp).to.eql(undefined);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{curpLookup}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 esperado para CURP faltante', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test('registered false', function () {",
+                  "  pm.expect(data.registered).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{curpLookupMissing}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Staging",
+      "item": [
+        {
+          "name": "Crear staging valido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 202', function () {",
+                  "  pm.response.to.have.status(202);",
+                  "});",
+                  "const data = pm.response.json();",
+                  "pm.test('created true', function () {",
+                  "  pm.expect(data.created).to.eql(true);",
+                  "});",
+                  "pm.environment.set('stagingId', data.staging_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/beneficiarios-staging",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/beneficiarios-staging",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "beneficiarios-staging"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear staging invalido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-BAD-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": \"false\",\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/beneficiarios-staging",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "beneficiarios-staging"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

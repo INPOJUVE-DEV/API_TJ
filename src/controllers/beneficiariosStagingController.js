@@ -32,6 +32,23 @@ function requiredObject(body, field) {
   return value;
 }
 
+function requiredBoolean(body, field) {
+  const source = body && typeof body === 'object' ? body : {};
+  if (!Object.prototype.hasOwnProperty.call(source, field)) {
+    const error = new Error(`${field} es obligatorio.`);
+    error.statusCode = 422;
+    throw error;
+  }
+
+  if (typeof source[field] !== 'boolean') {
+    const error = new Error(`${field} debe ser booleano.`);
+    error.statusCode = 422;
+    throw error;
+  }
+
+  return source[field];
+}
+
 function optionalString(body, field) {
   const value = body?.[field];
   if (value === undefined || value === null || value === '') {
@@ -53,8 +70,7 @@ function normalizeBeneficiarioPayload(body) {
     apellido_materno: requiredString(beneficiario, 'apellido_materno'),
     fecha_nacimiento: requiredString(beneficiario, 'fecha_nacimiento'),
     sexo: requiredString(beneficiario, 'sexo'),
-    discapacidad:
-      typeof beneficiario.discapacidad === 'boolean' ? beneficiario.discapacidad : Boolean(beneficiario.discapacidad),
+    discapacidad: requiredBoolean(beneficiario, 'discapacidad'),
     id_ine: requiredString(beneficiario, 'id_ine'),
     telefono: requiredString(beneficiario, 'telefono'),
     domicilio: {
