@@ -1,9 +1,13 @@
 # Docs 4 USI
 
-Paquete de apoyo para que la Unidad de Informatica pruebe la integracion de API_TJ desde Postman contra produccion:
+Documento preparado el 24 de abril de 2026 antes de las 14:30 hrs.
 
-- Base URL objetivo: `https://apitj-production.up.railway.app/api/v1`
-- Cliente esperado: `unidad_informatica`
+Paquete de entrega para la Unidad de Informatica sobre la integracion de `API_TJ` en produccion.
+
+Base validada:
+
+- URL: `https://apitj-production.up.railway.app/api/v1`
+- Cliente: `unidad_informatica`
 - Endpoints permitidos:
   - `POST /cardholders/lookup`
   - `POST /beneficiarios-staging`
@@ -11,37 +15,45 @@ Paquete de apoyo para que la Unidad de Informatica pruebe la integracion de API_
 ## Archivos incluidos
 
 - `manual_postman_produccion_usi.md`
+- `paso_a_paso_railway_windows_postman.md`
+- `validacion_produccion_2026-04-24.md`
 - `API_TJ_USI_production.postman_collection.json`
 - `API_TJ_USI_production.postman_environment.json`
 - `payload_lookup.json`
+- `payload_lookup_missing.json`
 - `payload_staging_ejemplo.json`
 - `payload_staging_invalido.json`
 
+## Lo que ya quedo validado
+
+Al corte del 24 de abril de 2026 antes de las 14:30 hrs, se deja documentado que:
+
+1. `GET /health` responde `200`.
+2. El JWT RS256 de `unidad_informatica` autentica correctamente en Railway.
+3. `lookup` responde `200` para las CURP de prueba entregadas por ustedes.
+4. `beneficiarios-staging` responde `202` con token y scope correctos.
+
+Las evidencias estan en `validacion_produccion_2026-04-24.md`.
+
 ## Respuesta corta
 
-Si, se puede probar desde Postman contra `https://apitj-production.up.railway.app/`, pero solo si:
+Si, se puede probar desde Postman contra Railway si:
 
-1. El backend de API_TJ ya tiene registrada la llave publica del cliente `unidad_informatica`.
-2. El JWT RS256 que pegues en Postman fue firmado con la llave privada correcta.
-3. El token usa `kid`, `iss`, `sub`, `aud`, `jti` y `scope` validos.
-4. El scope corresponde al endpoint que vas a invocar.
+1. Railway tiene registrada la llave publica correcta.
+2. El token fue firmado con la llave privada correcta.
+3. El JWT usa `kid`, `iss`, `sub`, `aud`, `jti` y `scope` validos.
+4. El scope corresponde al endpoint que se esta invocando.
 
-Si falla en produccion:
+## Uso recomendado
 
-- `401` suele indicar token invalido, `kid` incorrecto, llave no registrada, `aud` incorrecto o `jti` reutilizado.
-- `403` suele indicar scope insuficiente.
-- `422` suele indicar payload invalido.
-
-## Importacion rapida
-
-1. Importa la coleccion `API_TJ_USI_production.postman_collection.json`.
-2. Importa el environment `API_TJ_USI_production.postman_environment.json`.
-3. Pega un JWT valido en la variable `integrationToken`.
-4. Ejecuta primero `Lookup existente` o `Lookup inexistente`.
-5. Si el lookup responde `404`, usa `Crear staging valido`.
+1. Leer `paso_a_paso_railway_windows_postman.md`.
+2. Importar la coleccion y el environment.
+3. Generar un JWT con los scripts Node de este repo o desde la API propia de USI.
+4. Ejecutar primero los lookups validados.
+5. Ejecutar staging solo con un token nuevo y scope `beneficiarios.staging.create`.
 
 ## Importante
 
-- Esta carpeta esta pensada para pruebas manuales de USI.
-- No incluye endpoints administrativos internos.
-- No genera tokens dentro de Postman; el JWT debe venir de una API propia, script externo o proceso controlado por USI.
+- Esta carpeta no incluye endpoints administrativos internos.
+- Postman no genera tokens por si solo en este paquete.
+- La llave privada nunca debe subirse a Railway ni a Git.

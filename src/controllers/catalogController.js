@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getClientIp, recordAdminActivity } = require('../services/adminActivityService');
 const safeLogger = require('../utils/safeLogger');
 
 const MAX_NAME_LENGTH = 160;
@@ -137,6 +138,20 @@ async function fetchBenefitById(id) {
   return rows[0] || null;
 }
 
+async function auditCatalogMutation(req, action, benefitId, payload) {
+  if (!req.user?.id) {
+    return;
+  }
+  await recordAdminActivity({
+    actorUserId: req.user.id,
+    entityType: 'beneficios',
+    entityId: String(benefitId),
+    action,
+    ipAddress: getClientIp(req),
+    payload
+  });
+}
+
 exports.getCatalog = async (req, res) => {
   try {
     const q = req.query.q ? `%${req.query.q}%` : null;
@@ -238,6 +253,11 @@ exports.createBenefit = async (req, res) => {
     );
 
     const benefit = await fetchBenefitById(result.insertId);
+    await auditCatalogMutation(req, 'create', result.insertId, {
+      nombre,
+      categoriaId,
+      municipioId
+    });
     return res.status(201).json(benefit);
   } catch (err) {
     return handleError(res, err, 'Error al crear beneficio');
@@ -321,6 +341,7 @@ exports.updateBenefit = async (req, res) => {
 
     await db.execute(`UPDATE beneficios SET ${updates.join(', ')} WHERE id = ?`, [...params, id]);
     const benefit = await fetchBenefitById(id);
+    await auditCatalogMutation(req, 'update', id, body);
     return res.json(benefit);
   } catch (err) {
     return handleError(res, err, 'Error al actualizar beneficio');
@@ -335,6 +356,7 @@ exports.deleteBenefit = async (req, res) => {
       return res.status(404).json({ message: 'Beneficio no encontrado.' });
     }
     await db.execute('DELETE FROM beneficios WHERE id = ?', [id]);
+    await auditCatalogMutation(req, 'delete', id, { deleted: true });
     return res.status(204).send();
   } catch (err) {
     return handleError(res, err, 'Error al eliminar beneficio');

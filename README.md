@@ -165,3 +165,4 @@ La suite cubre carga basica de API, endpoint legacy `410`, servicios de hash/cif
 
 Consulta `readme_postman.md` para ejemplos de payloads.
 Para la Unidad de Informatica, revisa tambien `docs/manual_unidad_informatica_consumo_api.md`.
+Para la consola admin y sus contratos propuestos, revisa tambien `docs/admin_console_spec.md`.

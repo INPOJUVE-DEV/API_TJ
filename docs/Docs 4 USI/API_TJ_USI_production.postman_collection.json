@@ -2,27 +2,25 @@
   "info": {
     "name": "API_TJ USI Production",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Coleccion Postman para pruebas manuales de la Unidad de Informatica contra produccion. Solo incluye endpoints permitidos para el cliente unidad_informatica."
+    "description": "Coleccion Postman para pruebas manuales de la Unidad de Informatica contra produccion. Incluye lookups validados en Railway y pruebas controladas de staging."
   },
   "item": [
     {
-      "name": "01 Lookup",
+      "name": "01 Lookup validados",
       "item": [
         {
-          "name": "Lookup existente",
+          "name": "Lookup FEFA090821MSPLLNA5",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200 o 404', function () {",
-                  "  pm.expect([200, 404]).to.include(pm.response.code);",
-                  "});",
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const data = pm.response.json();",
-                  "pm.test('No expone CURP en claro', function () {",
-                  "  pm.expect(data.curp).to.eql(undefined);",
-                  "});"
+                  "pm.test('registered true', function () { pm.expect(data.registered).to.eql(true); });",
+                  "pm.test('folio esperado 4454', function () { pm.expect(String(data.folio_tarjeta)).to.eql('4454'); });",
+                  "pm.test('sin CURP en claro', function () { pm.expect(data.curp).to.eql(undefined); });"
                 ]
               }
             }
@@ -41,7 +39,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"curp\": \"{{curpLookup}}\"\n}",
+              "raw": "{\n  \"curp\": \"{{lookupCurp1}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -61,20 +59,163 @@
           }
         },
         {
-          "name": "Lookup inexistente",
+          "name": "Lookup HEES090305MSPRLLA0",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 404 esperado para CURP faltante', function () {",
-                  "  pm.response.to.have.status(404);",
-                  "});",
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const data = pm.response.json();",
-                  "pm.test('registered false', function () {",
-                  "  pm.expect(data.registered).to.eql(false);",
-                  "});"
+                  "pm.test('registered true', function () { pm.expect(data.registered).to.eql(true); });",
+                  "pm.test('folio esperado 9471', function () { pm.expect(String(data.folio_tarjeta)).to.eql('9471'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{lookupCurp2}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup BAHC090421MSPTRNA4",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('registered true', function () { pm.expect(data.registered).to.eql(true); });",
+                  "pm.test('folio esperado 4452', function () { pm.expect(String(data.folio_tarjeta)).to.eql('4452'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{lookupCurp3}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup HEHI090906MNLRRSA2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('registered true', function () { pm.expect(data.registered).to.eql(true); });",
+                  "pm.test('folio esperado 4476', function () { pm.expect(String(data.folio_tarjeta)).to.eql('4476'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{integrationToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"{{lookupCurp4}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cardholders/lookup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cardholders",
+                "lookup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lookup inexistente controlado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', function () { pm.response.to.have.status(404); });",
+                  "const data = pm.response.json();",
+                  "pm.test('registered false', function () { pm.expect(data.registered).to.eql(false); });"
                 ]
               }
             }
@@ -120,9 +261,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 422', function () {",
-                  "  pm.response.to.have.status(422);",
-                  "});"
+                  "pm.test('Status 422', function () { pm.response.to.have.status(422); });"
                 ]
               }
             }
@@ -173,7 +312,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-' + Date.now());"
+                  "const seed = Date.now().toString();",
+                  "const alnum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';",
+                  "const alnumChar = alnum[Number(seed.slice(-2)) % 36];",
+                  "const lastDigit = seed.slice(-1);",
+                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-' + seed);",
+                  "pm.environment.set('stagingCurpGenerated', 'AEIA000101MSPLRN' + alnumChar + lastDigit);"
                 ]
               }
             },
@@ -182,13 +326,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 202', function () {",
-                  "  pm.response.to.have.status(202);",
-                  "});",
+                  "pm.test('Status 202', function () { pm.response.to.have.status(202); });",
                   "const data = pm.response.json();",
-                  "pm.test('created true', function () {",
-                  "  pm.expect(data.created).to.eql(true);",
-                  "});",
+                  "pm.test('created true', function () { pm.expect(data.created).to.eql(true); });",
                   "pm.environment.set('stagingId', data.staging_id);"
                 ]
               }
@@ -208,7 +348,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurpGenerated}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -234,9 +374,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 409', function () {",
-                  "  pm.response.to.have.status(409);",
-                  "});"
+                  "pm.test('Status 409', function () { pm.response.to.have.status(409); });"
                 ]
               }
             }
@@ -255,7 +393,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurpGenerated}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": false,\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -281,7 +419,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-BAD-' + Date.now());"
+                  "const seed = Date.now().toString();",
+                  "const alnum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';",
+                  "const alnumChar = alnum[Number(seed.slice(-2)) % 36];",
+                  "const lastDigit = seed.slice(-1);",
+                  "pm.environment.set('externalRequestId', 'UI-POSTMAN-BAD-' + seed);",
+                  "pm.environment.set('stagingCurpGenerated', 'AEIA000101MSPLRN' + alnumChar + lastDigit);"
                 ]
               }
             },
@@ -290,9 +433,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 422', function () {",
-                  "  pm.response.to.have.status(422);",
-                  "});"
+                  "pm.test('Status 422', function () { pm.response.to.have.status(422); });"
                 ]
               }
             }
@@ -311,7 +452,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurp}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": \"false\",\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
+              "raw": "{\n  \"external_request_id\": \"{{externalRequestId}}\",\n  \"beneficiario\": {\n    \"curp\": \"{{stagingCurpGenerated}}\",\n    \"nombre\": \"JULIETA\",\n    \"apellido_paterno\": \"MORALES\",\n    \"apellido_materno\": \"CANO\",\n    \"fecha_nacimiento\": \"2005-05-21\",\n    \"sexo\": \"M\",\n    \"discapacidad\": \"false\",\n    \"id_ine\": \"INE123456\",\n    \"telefono\": \"4441234567\",\n    \"domicilio\": {\n      \"calle\": \"AV REVOLUCION\",\n      \"numero_ext\": \"321B\",\n      \"numero_int\": null,\n      \"colonia\": \"ZONA CENTRO\",\n      \"municipio_id\": 1,\n      \"codigo_postal\": \"22000\",\n      \"seccional\": \"001\"\n    }\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"

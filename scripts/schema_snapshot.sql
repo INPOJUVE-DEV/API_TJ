@@ -5,6 +5,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS staging_push_attempts;
 DROP TABLE IF EXISTS integration_jti_log;
 DROP TABLE IF EXISTS integration_audit_log;
+DROP TABLE IF EXISTS admin_activity_log;
 DROP TABLE IF EXISTS service_client_keys;
 DROP TABLE IF EXISTS service_clients;
 DROP TABLE IF EXISTS sync_audit_log;
@@ -52,6 +53,9 @@ CREATE TABLE usuarios (
   auth0_user_id VARCHAR(191) UNIQUE NULL,
   cardholder_sync_id INT NULL,
   status ENUM('pending','active','blocked') NOT NULL DEFAULT 'active',
+  session_version INT NOT NULL DEFAULT 0,
+  last_login_at DATETIME NULL,
+  last_failed_login_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (municipio_id) REFERENCES municipios(id)
@@ -189,6 +193,22 @@ CREATE TABLE integration_audit_log (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_integration_audit_client_created (client_code, created_at),
   FOREIGN KEY (client_id) REFERENCES service_clients(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE admin_activity_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  actor_user_id INT NULL,
+  actor_email VARCHAR(150) NULL,
+  entity_type VARCHAR(80) NOT NULL,
+  entity_id VARCHAR(120) NOT NULL,
+  action VARCHAR(80) NOT NULL,
+  ip_address VARCHAR(45) NULL,
+  payload JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_admin_activity_created (created_at),
+  INDEX idx_admin_activity_entity (entity_type, entity_id),
+  FOREIGN KEY (actor_user_id) REFERENCES usuarios(id)
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

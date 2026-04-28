@@ -8,8 +8,8 @@ process.env.FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || 'field-te
 // Mockear la capa de base de datos para no depender de MySQL en las pruebas
 jest.mock('../src/config/db', () => {
   const mockExecute = jest.fn().mockImplementation(async (sql) => {
-    if (typeof sql === 'string' && sql.includes('SELECT role FROM usuarios')) {
-      return [[{ role: 'admin' }], []];
+    if (typeof sql === 'string' && sql.includes('FROM usuarios')) {
+      return [[{ role: 'admin', status: 'active', session_version: 0 }], []];
     }
     if (typeof sql === 'string' && sql.includes('COUNT(*)')) {
       return [[{ total: 0 }], []];

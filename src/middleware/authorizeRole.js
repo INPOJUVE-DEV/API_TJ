@@ -9,17 +9,33 @@ module.exports = function authorizeRole(allowedRoles = []) {
     }
 
     try {
-      const [rows] = await db.execute('SELECT role FROM usuarios WHERE id = ? LIMIT 1', [
-        req.user.id
-      ]);
+      const [rows] = await db.execute(
+        'SELECT role, status, session_version FROM usuarios WHERE id = ? LIMIT 1',
+        [req.user.id]
+      );
       if (rows.length === 0) {
         return res.status(404).json({ message: 'Usuario no encontrado' });
       }
       const role = String(rows[0].role || '').toLowerCase();
+      const status = String(rows[0].status || '').toLowerCase();
+      const sessionVersion = Number(rows[0].session_version || 0);
+      const tokenType = String(req.user.tokenType || '').toLowerCase();
+
+      if (tokenType === 'admin') {
+        if (status !== 'active') {
+          return res.status(403).json({ message: 'Acceso denegado' });
+        }
+        if (Number(req.user.sessionVersion || 0) !== sessionVersion) {
+          return res.status(401).json({ message: 'Sesion expirada' });
+        }
+      }
+
       if (!allowed.has(role)) {
         return res.status(403).json({ message: 'Acceso denegado' });
       }
       req.user.role = role;
+      req.user.status = status;
+      req.user.sessionVersion = sessionVersion;
       return next();
     } catch (error) {
       safeLogger.error('Error al validar rol', error);

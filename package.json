@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "test": "jest",
     "seed": "node scripts/seed.js",
+    "seed:admin-demo": "node scripts/seed-admin-demo.js",
     "db:ensure": "node scripts/ensure-schema.js",
     "railway:predeploy": "node scripts/ensure-schema.js",
     "seed:if-needed": "node scripts/seed-if-needed.js",

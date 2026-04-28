@@ -2,6 +2,7 @@ const db = require('../config/db');
 const { buildCurpLookup } = require('../services/curpHashService');
 const { encryptJson, decryptJson } = require('../services/fieldEncryptionService');
 const { pushBeneficiario } = require('../services/sysIpjClient');
+const { getClientIp, recordAdminActivity } = require('../services/adminActivityService');
 const { recordSyncAudit } = require('../services/syncAuditService');
 const safeLogger = require('../utils/safeLogger');
 
@@ -104,6 +105,24 @@ function mapSysIpjStatus(result) {
     return 'rejected';
   }
   return 'error';
+}
+
+async function recordPushAdminActivity(req, stagingId, nextStatus, result) {
+  if (!req.user?.id) {
+    return;
+  }
+  await recordAdminActivity({
+    actorUserId: req.user.id,
+    entityType: 'beneficiario_staging',
+    entityId: String(stagingId),
+    action: 'push',
+    ipAddress: getClientIp(req),
+    payload: {
+      status: nextStatus,
+      sysIpjStatus: result.status,
+      errorMessage: result.errorMessage || null
+    }
+  });
 }
 
 exports.create = async (req, res) => {
@@ -356,6 +375,7 @@ exports.push = async (req, res) => {
       startedAt,
       finishedAt: now
     });
+    await recordPushAdminActivity(req, id, nextStatus, result);
   } catch (error) {
     safeLogger.error('Error al auditar push de staging', error);
     return res.status(500).json({ message: 'El envio termino, pero fallo la auditoria.' });

@@ -19,8 +19,14 @@ module.exports = function verifyToken(req, res, next) {
   const token = parts[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { id: decoded.id };
-    next();
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      status: decoded.status,
+      tokenType: decoded.token_type || 'local',
+      sessionVersion: decoded.session_version
+    };
+    return next();
   } catch (err) {
     const decoded = jwt.decode(token, { complete: true });
     const looksLikeIntegrationToken =
@@ -29,6 +35,6 @@ module.exports = function verifyToken(req, res, next) {
       Boolean(decoded?.payload?.scope);
     return res
       .status(looksLikeIntegrationToken ? 403 : 401)
-      .json({ message: looksLikeIntegrationToken ? 'Acceso denegado' : 'Token inválido' });
+      .json({ message: looksLikeIntegrationToken ? 'Acceso denegado' : 'Token invalido' });
   }
 };

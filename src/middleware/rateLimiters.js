@@ -19,6 +19,12 @@ const loginLimiter = buildLimiter({
   message: 'Demasiados intentos de inicio de sesion. Intenta mas tarde.'
 });
 
+const adminLoginLimiter = buildLimiter({
+  windowMs: FIFTEEN_MINUTES,
+  max: 6,
+  message: 'Demasiados intentos de acceso administrativo. Intenta mas tarde.'
+});
+
 const otpLimiter = buildLimiter({
   windowMs: FIFTEEN_MINUTES,
   max: 8,
@@ -44,6 +50,7 @@ const qrScanLimiter = buildLimiter({
 });
 
 module.exports = {
+  adminLoginLimiter,
   loginLimiter,
   otpLimiter,
   lookupLimiter,
