@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET es obligatorio');
-}
+const {
+  ADMIN_JWT_SECRET,
+  ADMIN_TOKEN_AUDIENCE,
+  ADMIN_TOKEN_ISSUER
+} = require('../config/tokenConfig');
 
 const ADMIN_JWT_EXPIRATION = process.env.ADMIN_JWT_EXPIRATION || '8h';
 const ADMIN_ROLES = new Set(['admin', 'reader']);
@@ -33,8 +33,12 @@ function buildAdminToken(user) {
       token_type: 'admin',
       session_version: Number(user.session_version || 0)
     },
-    JWT_SECRET,
-    { expiresIn: ADMIN_JWT_EXPIRATION }
+    ADMIN_JWT_SECRET,
+    {
+      expiresIn: ADMIN_JWT_EXPIRATION,
+      issuer: ADMIN_TOKEN_ISSUER,
+      audience: ADMIN_TOKEN_AUDIENCE
+    }
   );
 }
 

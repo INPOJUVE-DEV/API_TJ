@@ -8,6 +8,20 @@ process.env.FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || 'field-te
 // Mockear la capa de base de datos para no depender de MySQL en las pruebas
 jest.mock('../src/config/db', () => {
   const mockExecute = jest.fn().mockImplementation(async (sql) => {
+    if (
+      typeof sql === 'string' &&
+      sql.includes('SELECT id, nombre, apellidos, email, role, status, session_version')
+    ) {
+      return [[{
+        id: 1,
+        nombre: 'Admin',
+        apellidos: 'Local',
+        email: 'admin@example.com',
+        role: 'admin',
+        status: 'active',
+        session_version: 0
+      }], []];
+    }
     if (typeof sql === 'string' && sql.includes('FROM usuarios')) {
       return [[{ role: 'admin', status: 'active', session_version: 0 }], []];
     }
@@ -32,12 +46,36 @@ jest.mock('../src/config/db', () => {
 const app = require('../src/index');
 
 describe('Pruebas de API', () => {
-  const token = jwt.sign({ id: 1 }, process.env.JWT_SECRET);
+  const token = jwt.sign(
+    {
+      id: 1,
+      sub: '1',
+      role: 'admin',
+      status: 'active',
+      token_type: 'admin',
+      session_version: 0
+    },
+    process.env.JWT_SECRET,
+    {
+      issuer: 'api_tj:admin',
+      audience: 'api_tj:admin'
+    }
+  );
 
   test('GET /health responde con 200 { ok: true }', async () => {
     const res = await request(app).get('/health');
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  test('OPTIONS /api/v1/auth/login permite preflight desde 127.0.0.1 en local', async () => {
+    const res = await request(app)
+      .options('/api/v1/auth/login')
+      .set('Origin', 'http://127.0.0.1:3000')
+      .set('Access-Control-Request-Method', 'POST');
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe('http://127.0.0.1:3000');
   });
 
   test('GET /api/v1/catalog responde con 200 y estructura de lista', async () => {

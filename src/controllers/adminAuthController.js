@@ -1,4 +1,3 @@
-const bcrypt = require('bcrypt');
 const db = require('../config/db');
 const {
   buildAdminToken,
@@ -11,6 +10,7 @@ const {
   touchLoginSuccess
 } = require('../services/adminAuthService');
 const { getClientIp, recordAdminActivity } = require('../services/adminActivityService');
+const { hashPassword, verifyPassword } = require('../services/passwordService');
 const safeLogger = require('../utils/safeLogger');
 
 function invalidCredentials(res) {
@@ -39,11 +39,11 @@ exports.login = async (req, res) => {
       return invalidCredentials(res);
     }
 
-    const passwordMatches = user.password_hash
-      ? await bcrypt.compare(password, user.password_hash)
-      : false;
+    const passwordState = user.password_hash
+      ? await verifyPassword(password, user.password_hash)
+      : { valid: false, needsRehash: false };
 
-    if (!passwordMatches) {
+    if (!passwordState.valid) {
       await touchLoginFailure(user.id);
       await recordAdminActivity({
         actorUserId: user.id,
@@ -55,6 +55,11 @@ exports.login = async (req, res) => {
         payload: { reason: 'invalid_credentials' }
       });
       return invalidCredentials(res);
+    }
+
+    if (passwordState.needsRehash) {
+      const passwordHash = await hashPassword(password);
+      await db.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);
     }
 
     if (!isAdminRole(user.role) || user.status !== 'active') {

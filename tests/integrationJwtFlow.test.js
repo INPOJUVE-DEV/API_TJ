@@ -354,7 +354,7 @@ describe('Flujo completo de integracion con JWT RS256', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.statusCode).toBe(403);
-    expect(response.body).toEqual({ message: 'Acceso denegado' });
+    expect(response.body).toEqual({ message: 'Acceso admin denegado' });
   });
 
   test('staging rechaza payload sin discapacidad obligatoria', async () => {

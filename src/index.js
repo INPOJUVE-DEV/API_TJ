@@ -15,14 +15,48 @@ app.use(helmet());
 // CORS configuration
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
 const ADMIN_FRONTEND_ORIGIN = process.env.ADMIN_FRONTEND_ORIGIN || FRONTEND_ORIGIN;
-const publicOrigins = new Set([FRONTEND_ORIGIN, ADMIN_FRONTEND_ORIGIN].filter(Boolean));
+
+function expandLocalOriginAliases(origin) {
+  if (!origin) {
+    return [];
+  }
+
+  try {
+    const url = new URL(origin);
+    const hostname = String(url.hostname || '').toLowerCase();
+    const isLoopbackHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    if (!isLoopbackHost) {
+      return [origin];
+    }
+
+    const variants = ['localhost', '127.0.0.1'].map((alias) => {
+      const aliasUrl = new URL(origin);
+      aliasUrl.hostname = alias;
+      return aliasUrl.toString().replace(/\/$/, '');
+    });
+
+    return Array.from(new Set(variants));
+  } catch {
+    return [origin];
+  }
+}
+
+function buildAllowedOrigins(...origins) {
+  return new Set(
+    origins
+      .filter(Boolean)
+      .flatMap((origin) => expandLocalOriginAliases(origin))
+  );
+}
+
+const publicOrigins = buildAllowedOrigins(FRONTEND_ORIGIN, ADMIN_FRONTEND_ORIGIN);
+const adminOrigins = buildAllowedOrigins(ADMIN_FRONTEND_ORIGIN);
 
 function corsOptionsDelegate(req, callback) {
   const requestOrigin = req.header('Origin');
   const isAdminPath = (req.path || '').startsWith('/api/v1/admin');
-  const allowedOrigins = isAdminPath
-    ? new Set([ADMIN_FRONTEND_ORIGIN].filter(Boolean))
-    : publicOrigins;
+  const allowedOrigins = isAdminPath ? adminOrigins : publicOrigins;
 
   const origin = !requestOrigin
     ? false

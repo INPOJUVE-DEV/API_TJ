@@ -23,7 +23,12 @@ Dar al equipo de frontend todo lo necesario para construir la PWA admin sin tene
 
 ## Fuente de verdad
 
-Estos documentos ya reflejan el estado actual del backend admin implementado.
+Los documentos `01` a `06` reflejan el backend admin implementado.
+
+La documentacion del flujo ciudadano/beneficiarios ya no vive aqui.
+Ahora esta separada en:
+
+- [Front-beneficiarios](../Front-beneficiarios/README.md)
 
 Referencias internas utiles:
 

@@ -20,7 +20,19 @@ function redactSensitiveFields(value) {
   const redacted = {};
   for (const [key, item] of Object.entries(value)) {
     const lowered = String(key).toLowerCase();
-    if (['password', 'password_hash', 'refresh_token', 'accesstoken'].includes(lowered)) {
+    if (
+      [
+        'password',
+        'password_hash',
+        'password_confirmation',
+        'refresh_token',
+        'token',
+        'token_hash',
+        'accesstoken',
+        'reset_token',
+        'resettoken'
+      ].includes(lowered)
+    ) {
       redacted[key] = '[REDACTED]';
       continue;
     }

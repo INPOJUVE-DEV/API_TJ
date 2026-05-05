@@ -1,11 +1,20 @@
 const db = require('../config/db');
 const { buildCurpLookup } = require('../services/curpHashService');
+const {
+  hashPassword,
+  validatePassword
+} = require('../services/passwordService');
 const { recordSyncAudit } = require('../services/syncAuditService');
-const { verifyIdToken } = require('../services/auth0Service');
 const safeLogger = require('../utils/safeLogger');
+const {
+  clearRefreshTokenCookie,
+  getUserSessionProfileById,
+  issueUserSession
+} = require('../services/userSessionService');
 
 const VALID_STATUSES = new Set(['active', 'inactive', 'blocked']);
 const HASH_REGEX = /^[a-f0-9]{64}$/i;
+const INTERNAL_ROLES = new Set(['admin', 'reader', 'scanner']);
 
 function getActor(req) {
   return req.integration?.client?.client_code || (req.user?.id ? `user:${req.user.id}` : 'unknown');
@@ -19,6 +28,29 @@ function getRequiredString(body, field) {
     throw error;
   }
   return value.trim();
+}
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  if (!email) {
+    const error = new Error('email es obligatorio.');
+    error.statusCode = 422;
+    throw error;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error('email no es valido.');
+    error.statusCode = 422;
+    throw error;
+  }
+  return email;
+}
+
+function ensurePasswordConfirmation(password, confirmation) {
+  if (password !== confirmation) {
+    const error = new Error('password_confirmation no coincide.');
+    error.statusCode = 422;
+    throw error;
+  }
 }
 
 function handleValidationError(res, error) {
@@ -178,9 +210,11 @@ exports.verifyActivation = async (req, res) => {
     const curp = getRequiredString(req.body, 'curp');
     const { curpHash } = buildCurpLookup(curp);
     const [rows] = await db.execute(
-      `SELECT id, curp_hash, status, account_user_id, auth0_user_id
-       FROM cardholders_sync
-       WHERE tarjeta_numero = ?
+      `SELECT cs.id, cs.curp_hash, cs.status, cs.account_user_id,
+              u.password_hash AS linked_password_hash
+       FROM cardholders_sync cs
+       LEFT JOIN usuarios u ON u.id = cs.account_user_id
+       WHERE cs.tarjeta_numero = ?
        LIMIT 1`,
       [tarjetaNumero]
     );
@@ -197,7 +231,7 @@ exports.verifyActivation = async (req, res) => {
         message: 'La tarjeta no esta activa.'
       });
     }
-    if (rows[0].account_user_id || rows[0].auth0_user_id) {
+    if (rows[0].account_user_id && rows[0].linked_password_hash) {
       return res.status(409).json({
         can_activate: false,
         message: 'La tarjeta ya cuenta con una cuenta vinculada.'
@@ -225,39 +259,25 @@ exports.verifyActivation = async (req, res) => {
 };
 
 exports.completeActivation = async (req, res) => {
-  const tarjetaNumero = String(req.body?.tarjeta_numero || '').trim();
-  const idToken = String(req.body?.auth0_id_token || '').trim();
-  if (!tarjetaNumero || !idToken) {
-    return res
-      .status(422)
-      .json({ message: 'tarjeta_numero y auth0_id_token son obligatorios.' });
-  }
-
-  let auth0Payload;
-  try {
-    auth0Payload = await verifyIdToken(idToken);
-  } catch (error) {
-    const status = error.statusCode === 500 ? 500 : 401;
-    if (status === 500) {
-      safeLogger.error('Error de configuracion Auth0', error);
-    }
-    return res.status(status).json({ message: 'Token Auth0 invalido.' });
-  }
-
-  const auth0UserId = auth0Payload.sub;
-  const email = String(auth0Payload.email || '').trim().toLowerCase();
-  if (!email) {
-    return res.status(422).json({ message: 'El token Auth0 debe incluir email.' });
-  }
-
   let connection;
   let finished = false;
   try {
+    const tarjetaNumero = getRequiredString(req.body, 'tarjeta_numero');
+    const email = normalizeEmail(req.body?.email);
+    const password = getRequiredString(req.body, 'password');
+    const passwordConfirmation = getRequiredString(req.body, 'password_confirmation');
+    ensurePasswordConfirmation(password, passwordConfirmation);
+    const safePassword = validatePassword(password, {
+      email,
+      forbiddenValues: [tarjetaNumero]
+    });
+    const passwordHash = await hashPassword(safePassword);
+
     connection = await db.getConnection();
     await connection.beginTransaction();
 
     const [cardholders] = await connection.execute(
-      `SELECT id, status, account_user_id, auth0_user_id, activation_verified_until
+      `SELECT id, status, account_user_id, activation_verified_until
        FROM cardholders_sync
        WHERE tarjeta_numero = ?
        LIMIT 1
@@ -268,11 +288,6 @@ exports.completeActivation = async (req, res) => {
       await connection.rollback();
       finished = true;
       return res.status(404).json({ message: 'La tarjeta no esta disponible.' });
-    }
-    if (cardholders[0].account_user_id || cardholders[0].auth0_user_id) {
-      await connection.rollback();
-      finished = true;
-      return res.status(409).json({ message: 'La tarjeta ya esta vinculada.' });
     }
     if (
       !cardholders[0].activation_verified_until ||
@@ -286,66 +301,121 @@ exports.completeActivation = async (req, res) => {
     }
 
     const cardholderSyncId = cardholders[0].id;
-    const [existingUsers] = await connection.execute(
-      `SELECT id, cardholder_sync_id
+    let linkedUser = null;
+    if (cardholders[0].account_user_id) {
+      const [linkedUsers] = await connection.execute(
+        `SELECT id, email, role, status, cardholder_sync_id, password_hash
+         FROM usuarios
+         WHERE id = ?
+         LIMIT 1
+         FOR UPDATE`,
+        [cardholders[0].account_user_id]
+      );
+      linkedUser = linkedUsers[0] || null;
+      if (linkedUser?.cardholder_sync_id && linkedUser.cardholder_sync_id !== cardholderSyncId) {
+        await connection.rollback();
+        finished = true;
+        return res.status(409).json({ message: 'La tarjeta ya esta vinculada a otra cuenta.' });
+      }
+      if (linkedUser?.password_hash) {
+        await connection.rollback();
+        finished = true;
+        return res.status(409).json({ message: 'La tarjeta ya esta vinculada.' });
+      }
+    }
+
+    const [emailMatches] = await connection.execute(
+      `SELECT id, role, status, cardholder_sync_id, password_hash
        FROM usuarios
-       WHERE auth0_user_id = ? OR email = ?
+       WHERE email = ?
        LIMIT 1
        FOR UPDATE`,
-      [auth0UserId, email]
+      [email]
     );
+    const existingUserByEmail = emailMatches[0] || null;
 
-    let userId;
-    if (existingUsers.length > 0) {
+    if (linkedUser && existingUserByEmail && existingUserByEmail.id !== linkedUser.id) {
+      await connection.rollback();
+      finished = true;
+      return res.status(409).json({ message: 'El email ya esta vinculado a otra cuenta.' });
+    }
+
+    let targetUser = linkedUser;
+    if (!targetUser && existingUserByEmail) {
       if (
-        existingUsers[0].cardholder_sync_id &&
-        existingUsers[0].cardholder_sync_id !== cardholderSyncId
+        existingUserByEmail.cardholder_sync_id &&
+        existingUserByEmail.cardholder_sync_id !== cardholderSyncId
       ) {
         await connection.rollback();
         finished = true;
-        return res.status(409).json({ message: 'El usuario ya esta vinculado a otra tarjeta.' });
+        return res.status(409).json({ message: 'El email ya esta vinculado a otra tarjeta.' });
       }
-      userId = existingUsers[0].id;
+      if (
+        INTERNAL_ROLES.has(String(existingUserByEmail.role || '').toLowerCase()) &&
+        !existingUserByEmail.cardholder_sync_id
+      ) {
+        await connection.rollback();
+        finished = true;
+        return res.status(409).json({ message: 'El email ya existe en otra cuenta.' });
+      }
+      targetUser = existingUserByEmail;
+    }
+
+    let userId;
+    if (targetUser) {
+      userId = targetUser.id;
       await connection.execute(
         `UPDATE usuarios
-         SET auth0_user_id = ?, email = ?, cardholder_sync_id = ?, status = 'active'
+         SET email = ?, password_hash = ?, cardholder_sync_id = ?, role = 'beneficiary',
+             status = 'active', auth0_user_id = NULL, session_version = session_version + 1
          WHERE id = ?`,
-        [auth0UserId, email, cardholderSyncId, userId]
+        [email, passwordHash, cardholderSyncId, userId]
       );
     } else {
       const [insertResult] = await connection.execute(
         `INSERT INTO usuarios
           (nombre, apellidos, curp, email, telefono, municipio_id, password_hash, role,
-           auth0_user_id, cardholder_sync_id, status)
-         VALUES (NULL, NULL, NULL, ?, NULL, NULL, NULL, 'reader', ?, ?, 'active')`,
-        [email, auth0UserId, cardholderSyncId]
+           cardholder_sync_id, status)
+         VALUES (NULL, NULL, NULL, ?, NULL, NULL, ?, 'beneficiary', ?, 'active')`,
+        [email, passwordHash, cardholderSyncId]
       );
       userId = insertResult.insertId;
     }
 
     await connection.execute(
       `UPDATE cardholders_sync
-       SET account_user_id = ?, auth0_user_id = ?, activation_verified_until = NULL
+       SET account_user_id = ?, auth0_user_id = NULL, activation_verified_until = NULL
        WHERE id = ?`,
-      [userId, auth0UserId, cardholderSyncId]
+      [userId, cardholderSyncId]
     );
+
+    const freshUser = await getUserSessionProfileById(userId, connection);
+    const sessionPayload = await issueUserSession(res, freshUser, connection);
 
     await connection.commit();
     finished = true;
     return res.status(200).json({
       activated: true,
-      message: 'Cuenta vinculada correctamente'
+      message: 'Cuenta activada correctamente',
+      ...sessionPayload
     });
   } catch (error) {
     if (connection && !finished) {
       try {
         await connection.rollback();
       } catch (rollbackError) {
-        safeLogger.error('Error al revertir activacion', rollbackError);
+        safeLogger.error('Error al revertir activacion local', rollbackError);
       }
     }
-    safeLogger.error('Error al completar activacion', error);
-    return res.status(500).json({ message: 'Error al vincular cuenta.' });
+    clearRefreshTokenCookie(res);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'El email ya existe.' });
+    }
+    if (error.statusCode) {
+      return handleValidationError(res, error);
+    }
+    safeLogger.error('Error al completar activacion local', error);
+    return res.status(500).json({ message: 'Error al activar cuenta.' });
   } finally {
     if (connection) {
       connection.release();
@@ -355,6 +425,7 @@ exports.completeActivation = async (req, res) => {
 
 exports.createAccount = async (req, res) => {
   return res.status(410).json({
-    message: 'El alta local con contrasena fue retirada. Usa el flujo de activacion con Auth0.'
+    message:
+      'El alta legacy fue retirada. Usa /api/v1/cardholders/verify-activation y /complete-activation.'
   });
 };

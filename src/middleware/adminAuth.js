@@ -1,10 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { assertValidAdminSession } = require('../services/adminAuthService');
-
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET es obligatorio');
-}
+const {
+  ADMIN_JWT_SECRET,
+  getAdminTokenVerifyOptions
+} = require('../config/tokenConfig');
 
 module.exports = async function verifyAdminToken(req, res, next) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -14,7 +13,7 @@ module.exports = async function verifyAdminToken(req, res, next) {
 
   const token = authHeader.replace(/^Bearer\s+/i, '');
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, ADMIN_JWT_SECRET, getAdminTokenVerifyOptions());
     if (decoded.token_type !== 'admin') {
       return res.status(403).json({ message: 'Acceso admin denegado' });
     }
@@ -37,7 +36,7 @@ module.exports = async function verifyAdminToken(req, res, next) {
     const decoded = jwt.decode(token, { complete: true });
     const looksLikeIntegrationToken =
       decoded?.header?.alg === 'RS256' ||
-      Boolean(decoded?.payload?.iss) ||
+      Boolean(decoded?.header?.kid) ||
       Boolean(decoded?.payload?.scope);
     const status = looksLikeIntegrationToken ? 403 : error.statusCode === 403 ? 403 : 401;
     return res.status(status).json({

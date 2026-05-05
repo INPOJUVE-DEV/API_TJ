@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const request = require('supertest');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
 process.env.CURP_HASH_SECRET = process.env.CURP_HASH_SECRET || 'curp-test-secret';
 process.env.FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || 'field-test-secret';
 process.env.ADMIN_FRONTEND_ORIGIN = 'https://admin.example.com';
@@ -275,7 +276,7 @@ describe('admin patch backend', () => {
         session_version: 0
       },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '8h', issuer: 'api_tj:admin', audience: 'api_tj:admin' }
     );
 
     const listResponse = await request(app)
@@ -309,7 +310,7 @@ describe('admin patch backend', () => {
         session_version: 0
       },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '8h', issuer: 'api_tj:admin', audience: 'api_tj:admin' }
     );
     const nonAdminToken = jwt.sign({ id: 1 }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
@@ -327,6 +328,6 @@ describe('admin patch backend', () => {
     const forbidden = await request(app)
       .get('/api/v1/admin/dashboard')
       .set('Authorization', `Bearer ${nonAdminToken}`);
-    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.statusCode).toBe(401);
   });
 });

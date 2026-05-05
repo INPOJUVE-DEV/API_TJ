@@ -1,6 +1,6 @@
 const express = require('express');
 const controller = require('../controllers/beneficiariosStagingController');
-const verifyToken = require('../middleware/auth');
+const verifyAdminToken = require('../middleware/adminAuth');
 const authorizeRole = require('../middleware/authorizeRole');
 const { requireIntegrationScope } = require('../middleware/integrationAuth');
 const { integrationClientRateLimit } = require('../middleware/integrationClientRateLimit');
@@ -13,8 +13,8 @@ router.post(
   integrationClientRateLimit(),
   controller.create
 );
-router.get('/', verifyToken, authorizeRole(['admin']), controller.list);
-router.delete('/expired', verifyToken, authorizeRole(['admin']), controller.cleanupExpired);
-router.post('/:id/push', verifyToken, authorizeRole(['admin']), controller.push);
+router.get('/', verifyAdminToken, authorizeRole(['admin']), controller.list);
+router.delete('/expired', verifyAdminToken, authorizeRole(['admin']), controller.cleanupExpired);
+router.post('/:id/push', verifyAdminToken, authorizeRole(['admin']), controller.push);
 
 module.exports = router;

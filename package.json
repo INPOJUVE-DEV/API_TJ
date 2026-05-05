@@ -9,6 +9,7 @@
     "test": "jest",
     "seed": "node scripts/seed.js",
     "seed:admin-demo": "node scripts/seed-admin-demo.js",
+    "seed:frontend-local": "node scripts/seed-frontend-local.js",
     "db:ensure": "node scripts/ensure-schema.js",
     "railway:predeploy": "node scripts/ensure-schema.js",
     "seed:if-needed": "node scripts/seed-if-needed.js",
@@ -24,6 +25,7 @@
     "start:render": "npm run db:ensure && npm run seed:if-needed && npm start"
   },
   "dependencies": {
+    "argon2": "^0.44.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

@@ -1,9 +1,10 @@
 /* eslint-disable no-console */
 require('dotenv').config();
 const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
 const { getDbConfig } = require('../src/config/dbOptions');
 const { buildCurpLookup } = require('../src/services/curpHashService');
+const { hashPassword } = require('../src/services/passwordService');
+const { buildDeviceTestFixtures } = require('./fixtures/deviceTestBeneficiaries');
 
 const NODE_ENV = String(process.env.NODE_ENV || '').toLowerCase();
 const ALLOW_PROD_SEED = String(process.env.ALLOW_PROD_SEED || '').toLowerCase() === 'true';
@@ -19,7 +20,40 @@ function getSeedPassword(envKey, fallback) {
   return fallback;
 }
 
-const MUNICIPIOS = ['San Luis Potosí', 'Soledad de Graciano Sánchez', 'Ciudad Valles', 'Matehuala'];
+const MUNICIPIOS = [
+  'San Luis Potosí',
+  'Soledad de Graciano Sánchez',
+  'Ciudad Valles',
+  'Matehuala',
+  'Villa de Pozos',
+  'Rioverde',
+  'Tancanhuitz'
+];
+
+function normalizeFixtureMunicipioName(value) {
+  if (value === 'San Luis Potosi') {
+    return MUNICIPIOS[0];
+  }
+  if (value === 'Soledad de Graciano Sanchez') {
+    return MUNICIPIOS[1];
+  }
+  return value;
+}
+
+const DEVICE_TEST_FIXTURES = buildDeviceTestFixtures({
+  passwordOverride: process.env.SEED_DEVICE_TEST_PASSWORD || null
+}).map(({ user, cardholder, ...meta }) => ({
+  ...meta,
+  user: {
+    ...user,
+    municipio: normalizeFixtureMunicipioName(user.municipio)
+  },
+  cardholder: {
+    ...cardholder,
+    municipio: normalizeFixtureMunicipioName(cardholder.municipio)
+  }
+}));
+
 const CATEGORIAS = ['Restaurantes', 'Salud', 'Tecnologia', 'Entretenimiento', 'Educacion'];
 
 const BENEFICIOS = [
@@ -31,8 +65,14 @@ const BENEFICIOS = [
     direccion: 'Blvd. México-Laredo 123, Centro',
     horario: 'L-D 08:00 - 22:00',
     descripcion: 'Coffee shop local con descuentos especiales para estudiantes.',
+    headline: 'Nuevo beneficio en cafeterias',
+    summary: 'Aprovecha 20% de descuento en bebidas y alimentos participantes.',
+    imageUrl: 'https://cdn.tarjetajoven.gob.mx/benefits/cafe-huasteco.jpg',
+    publishedAt: '2026-04-28T15:00:00Z',
     lat: 21.9833,
-    lng: -99.0167
+    lng: -99.0167,
+    isActive: true,
+    isVisibleToBeneficiary: true
   },
   {
     nombre: 'Gimnasio Potosino',
@@ -42,8 +82,14 @@ const BENEFICIOS = [
     direccion: 'Av. Venustiano Carranza 456, Morales',
     horario: 'L-S 06:00 - 23:00',
     descripcion: 'Gimnasio con entrenamiento funcional y clases grupales.',
+    headline: 'Nuevo beneficio para activarte',
+    summary: 'Inscripcion gratis y 15% de descuento en mensualidad.',
+    imageUrl: 'https://cdn.tarjetajoven.gob.mx/benefits/gimnasio-potosino.jpg',
+    publishedAt: '2026-04-30T15:00:00Z',
     lat: 22.1565,
-    lng: -100.9754
+    lng: -100.9754,
+    isActive: true,
+    isVisibleToBeneficiary: true
   },
   {
     nombre: 'Cine Centro',
@@ -53,8 +99,14 @@ const BENEFICIOS = [
     direccion: 'Plaza Principal 789, Zona Centro',
     horario: 'L-D 12:00 - 23:59',
     descripcion: 'Cadena local de cines con estrenos y funciones especiales.',
+    headline: null,
+    summary: null,
+    imageUrl: null,
+    publishedAt: '2026-04-20T12:00:00Z',
     lat: 22.1818,
-    lng: -100.9388
+    lng: -100.9388,
+    isActive: true,
+    isVisibleToBeneficiary: true
   },
   {
     nombre: 'Tech Lab SLP',
@@ -64,8 +116,14 @@ const BENEFICIOS = [
     direccion: 'Av. Himalaya 321, Lomas',
     horario: 'L-V 09:00 - 19:00',
     descripcion: 'Aceleradora de talento digital con programas de programacion.',
+    headline: null,
+    summary: 'Beca especial para cursos intensivos de talento digital.',
+    imageUrl: null,
+    publishedAt: '2026-04-18T10:00:00Z',
     lat: 22.1408,
-    lng: -101.0184
+    lng: -101.0184,
+    isActive: true,
+    isVisibleToBeneficiary: true
   }
 ];
 
@@ -88,7 +146,7 @@ const USUARIOS = [
     telefono: '4819876543',
     municipio: 'Ciudad Valles',
     password: getSeedPassword('SEED_READER1_PASSWORD', 'Secret456!'),
-    role: 'reader'
+    role: 'beneficiary'
   },
   {
     nombre: 'Maria',
@@ -109,7 +167,8 @@ const USUARIOS = [
     municipio: 'San Luis Potosí',
     password: getSeedPassword('SEED_SCANNER_PASSWORD', 'Scan1234!'),
     role: 'scanner'
-  }
+  },
+  ...DEVICE_TEST_FIXTURES.map((fixture) => fixture.user)
 ];
 
 const CARDHOLDERS = [
@@ -146,7 +205,8 @@ const CARDHOLDERS = [
     municipio: 'San Luis Potosí',
     tarjeta: 'TJ-0099',
     status: 'inactive'
-  }
+  },
+  ...DEVICE_TEST_FIXTURES.map((fixture) => fixture.cardholder)
 ];
 
 const SOLICITUDES = [
@@ -188,8 +248,6 @@ const SOLICITUDES = [
   }
 ];
 
-const SALT_ROUNDS = 10;
-
 async function ensureSchema(pool) {
   const ddlStatements = [
     `CREATE TABLE IF NOT EXISTS municipios (
@@ -211,7 +269,7 @@ async function ensureSchema(pool) {
       telefono VARCHAR(20),
       municipio_id INT,
       password_hash VARCHAR(255) NULL,
-      role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader',
+      role ENUM('admin','reader','scanner','beneficiary') NOT NULL DEFAULT 'beneficiary',
       creditos INT NOT NULL DEFAULT 0,
       foto_url VARCHAR(255),
       portada_url VARCHAR(255),
@@ -259,6 +317,12 @@ async function ensureSchema(pool) {
       horario VARCHAR(120),
       lat DECIMAL(10,8),
       lng DECIMAL(11,8),
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      is_visible_to_beneficiary TINYINT(1) NOT NULL DEFAULT 1,
+      published_at DATETIME NULL,
+      headline VARCHAR(160) NULL,
+      summary VARCHAR(255) NULL,
+      image_url VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uq_beneficios_nombre (nombre),
       FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -455,8 +519,20 @@ async function ensureSchema(pool) {
     `CREATE TABLE IF NOT EXISTS refresh_tokens (
       id INT AUTO_INCREMENT PRIMARY KEY,
       usuario_id INT NOT NULL,
-      refresh_token VARCHAR(255) NOT NULL UNIQUE,
+      refresh_token CHAR(64) NOT NULL UNIQUE,
       expiry_date DATETIME NOT NULL,
+      revoked_at DATETIME NULL,
+      rotated_from INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      usuario_id INT NOT NULL,
+      token_hash CHAR(64) NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      consumed_at DATETIME NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         ON DELETE CASCADE
@@ -517,8 +593,10 @@ async function ensureSchema(pool) {
 
   const [[{ dbName }]] = await pool.query('SELECT DATABASE() AS dbName');
   await ensureUsuariosColumns(pool, dbName);
+  await ensureRefreshTokenColumns(pool, dbName);
   await relaxUsuariosForAuth0(pool, dbName);
   await ensureUsuariosRoleEnum(pool, dbName);
+  await migrateBeneficiaryRoles(pool);
   await ensureSolicitudesColumns(pool, dbName);
   await ensureNewPatchColumns(pool, dbName);
 }
@@ -551,7 +629,7 @@ async function ensureUsuariosColumns(pool, dbName) {
     dbName,
     'usuarios',
     'role',
-    "ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader'"
+    "ENUM('admin','reader','scanner','beneficiary') NOT NULL DEFAULT 'beneficiary'"
   );
   await ensureColumn(pool, dbName, 'usuarios', 'creditos', 'INT NOT NULL DEFAULT 0');
   await ensureColumn(pool, dbName, 'usuarios', 'foto_url', 'VARCHAR(255) NULL');
@@ -575,6 +653,11 @@ async function ensureUsuariosColumns(pool, dbName) {
   await ensureColumn(pool, dbName, 'usuarios', 'session_version', 'INT NOT NULL DEFAULT 0');
   await ensureColumn(pool, dbName, 'usuarios', 'last_login_at', 'DATETIME NULL');
   await ensureColumn(pool, dbName, 'usuarios', 'last_failed_login_at', 'DATETIME NULL');
+}
+
+async function ensureRefreshTokenColumns(pool, dbName) {
+  await ensureColumn(pool, dbName, 'refresh_tokens', 'revoked_at', 'DATETIME NULL');
+  await ensureColumn(pool, dbName, 'refresh_tokens', 'rotated_from', 'INT NULL');
 }
 
 async function relaxUsuariosForAuth0(pool, dbName) {
@@ -613,6 +696,31 @@ async function ensureNewPatchColumns(pool, dbName) {
     'activation_verified_until',
     'DATETIME NULL'
   );
+  await ensureColumn(pool, dbName, 'beneficios', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+  await ensureColumn(
+    pool,
+    dbName,
+    'beneficios',
+    'is_visible_to_beneficiary',
+    'TINYINT(1) NOT NULL DEFAULT 1'
+  );
+  await ensureColumn(pool, dbName, 'beneficios', 'published_at', 'DATETIME NULL');
+  await ensureColumn(pool, dbName, 'beneficios', 'headline', 'VARCHAR(160) NULL');
+  await ensureColumn(pool, dbName, 'beneficios', 'summary', 'VARCHAR(255) NULL');
+  await ensureColumn(pool, dbName, 'beneficios', 'image_url', 'VARCHAR(255) NULL');
+}
+
+async function backfillBeneficiosPublicationFields(pool) {
+  await pool.execute(
+    `UPDATE beneficios
+     SET is_active = COALESCE(is_active, 1),
+         is_visible_to_beneficiary = COALESCE(is_visible_to_beneficiary, 1)`
+  );
+  await pool.execute(
+    `UPDATE beneficios
+     SET published_at = created_at
+     WHERE published_at IS NULL`
+  );
 }
 
 async function ensureUsuariosRoleEnum(pool, dbName) {
@@ -627,11 +735,20 @@ async function ensureUsuariosRoleEnum(pool, dbName) {
     return;
   }
   const columnType = String(rows[0].COLUMN_TYPE || '');
-  if (!columnType.includes('scanner')) {
+  if (!columnType.includes('scanner') || !columnType.includes('beneficiary')) {
     await pool.execute(
-      "ALTER TABLE usuarios MODIFY COLUMN role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader'"
+      "ALTER TABLE usuarios MODIFY COLUMN role ENUM('admin','reader','scanner','beneficiary') NOT NULL DEFAULT 'beneficiary'"
     );
   }
+}
+
+async function migrateBeneficiaryRoles(pool) {
+  await pool.execute(
+    `UPDATE usuarios
+     SET role = 'beneficiary'
+     WHERE role = 'reader'
+       AND cardholder_sync_id IS NOT NULL`
+  );
 }
 
 async function seedMunicipios(pool) {
@@ -790,8 +907,9 @@ async function seedBeneficios(pool, categoriaMap, municipioMap) {
     const municipioId = municipioMap[beneficio.municipio] || null;
     await pool.execute(
       `INSERT INTO beneficios
-        (nombre, descripcion, categoria_id, municipio_id, descuento, direccion, horario, lat, lng)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (nombre, descripcion, categoria_id, municipio_id, descuento, direccion, horario, lat, lng,
+         is_active, is_visible_to_beneficiary, published_at, headline, summary, image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         descripcion = VALUES(descripcion),
         categoria_id = VALUES(categoria_id),
@@ -800,7 +918,13 @@ async function seedBeneficios(pool, categoriaMap, municipioMap) {
         direccion = VALUES(direccion),
         horario = VALUES(horario),
         lat = VALUES(lat),
-        lng = VALUES(lng)`,
+        lng = VALUES(lng),
+        is_active = VALUES(is_active),
+        is_visible_to_beneficiary = VALUES(is_visible_to_beneficiary),
+        published_at = VALUES(published_at),
+        headline = VALUES(headline),
+        summary = VALUES(summary),
+        image_url = VALUES(image_url)`,
       [
         beneficio.nombre,
         beneficio.descripcion,
@@ -810,7 +934,13 @@ async function seedBeneficios(pool, categoriaMap, municipioMap) {
         beneficio.direccion,
         beneficio.horario,
         beneficio.lat,
-        beneficio.lng
+        beneficio.lng,
+        beneficio.isActive ? 1 : 0,
+        beneficio.isVisibleToBeneficiary ? 1 : 0,
+        beneficio.publishedAt ? new Date(beneficio.publishedAt) : new Date(),
+        beneficio.headline || null,
+        beneficio.summary || null,
+        beneficio.imageUrl || null
       ]
     );
   }
@@ -818,7 +948,7 @@ async function seedBeneficios(pool, categoriaMap, municipioMap) {
 
 async function seedUsuarios(pool, municipioMap) {
   for (const usuario of USUARIOS) {
-    const passwordHash = await bcrypt.hash(usuario.password, SALT_ROUNDS);
+    const passwordHash = await hashPassword(usuario.password);
     const municipioId = municipioMap[usuario.municipio] || null;
     await pool.execute(
       `INSERT INTO usuarios
@@ -886,7 +1016,7 @@ async function linkCardholdersToUsers(pool, cardholderMap, userMap) {
 
 async function seedSolicitudes(pool, municipioMap) {
   for (const solicitud of SOLICITUDES) {
-    const passwordHash = await bcrypt.hash(solicitud.password, SALT_ROUNDS);
+    const passwordHash = await hashPassword(solicitud.password);
     const municipioId = municipioMap[solicitud.municipio] || null;
     await pool.execute(
       `INSERT INTO solicitudes_registro
@@ -940,6 +1070,8 @@ async function main() {
   try {
     await ensureSchema(pool);
     console.log('Esquema verificado.');
+    await backfillBeneficiosPublicationFields(pool);
+    console.log('Beneficios historicos normalizados.');
 
     const municipioMap = await seedMunicipios(pool);
     console.log('Municipios listos.');
@@ -983,3 +1115,4 @@ module.exports = { ensureSchema, getDbConfig };
 if (require.main === module) {
   main();
 }
+

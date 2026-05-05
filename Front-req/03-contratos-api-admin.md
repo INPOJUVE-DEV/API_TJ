@@ -258,7 +258,6 @@ Response:
       "role": "admin",
       "status": "active",
       "cardholderSyncId": null,
-      "auth0UserId": null,
       "lastLoginAt": "2026-04-28T12:00:00.000Z",
       "lastFailedLoginAt": null,
       "createdAt": "2026-04-01T00:00:00.000Z",

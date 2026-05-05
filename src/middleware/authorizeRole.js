@@ -21,7 +21,7 @@ module.exports = function authorizeRole(allowedRoles = []) {
       const sessionVersion = Number(rows[0].session_version || 0);
       const tokenType = String(req.user.tokenType || '').toLowerCase();
 
-      if (tokenType === 'admin') {
+      if (tokenType === 'admin' || tokenType === 'user') {
         if (status !== 'active') {
           return res.status(403).json({ message: 'Acceso denegado' });
         }

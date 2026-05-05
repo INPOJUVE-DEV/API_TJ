@@ -1,10 +1,9 @@
-const bcrypt = require('bcrypt');
 const db = require('../config/db');
 const { invalidateAdminSessions } = require('../services/adminAuthService');
 const { getClientIp, recordAdminActivity } = require('../services/adminActivityService');
+const { hashPassword, validatePassword } = require('../services/passwordService');
 const safeLogger = require('../utils/safeLogger');
 
-const SALT_ROUNDS = 10;
 const ALLOWED_ROLES = new Set(['admin', 'reader']);
 const ALLOWED_STATUSES = new Set(['active', 'blocked', 'pending']);
 
@@ -116,7 +115,6 @@ function mapUserRow(row) {
     role: row.role,
     status: row.status,
     cardholderSyncId: row.cardholder_sync_id || null,
-    auth0UserId: row.auth0_user_id || null,
     lastLoginAt: row.last_login_at || null,
     lastFailedLoginAt: row.last_failed_login_at || null,
     createdAt: row.created_at || null,
@@ -127,7 +125,7 @@ function mapUserRow(row) {
 async function fetchUserById(id) {
   const [rows] = await db.execute(
     `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.municipio_id, u.role, u.status,
-            u.cardholder_sync_id, u.auth0_user_id, u.last_login_at, u.last_failed_login_at,
+            u.cardholder_sync_id, u.last_login_at, u.last_failed_login_at,
             u.created_at, u.updated_at, m.nombre AS municipio
      FROM usuarios u
      LEFT JOIN municipios m ON m.id = u.municipio_id
@@ -172,7 +170,7 @@ exports.listUsers = async (req, res) => {
     );
     const [rows] = await db.execute(
       `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.municipio_id, u.role, u.status,
-              u.cardholder_sync_id, u.auth0_user_id, u.last_login_at, u.last_failed_login_at,
+              u.cardholder_sync_id, u.last_login_at, u.last_failed_login_at,
               u.created_at, u.updated_at, m.nombre AS municipio
        FROM usuarios u
        LEFT JOIN municipios m ON m.id = u.municipio_id
@@ -225,8 +223,9 @@ exports.createUser = async (req, res) => {
     const municipioId = normalizePositiveInt(req.body?.municipioId, 'municipioId');
     const role = normalizeRole(req.body?.role, true);
     const status = normalizeStatus(req.body?.status, true);
-    const password = normalizeRequiredString(req.body?.password, 120, 'password');
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const rawPassword = normalizeRequiredString(req.body?.password, 128, 'password');
+    const password = validatePassword(rawPassword, { email });
+    const passwordHash = await hashPassword(password);
 
     const [result] = await db.execute(
       `INSERT INTO usuarios
@@ -360,13 +359,13 @@ exports.updateUser = async (req, res) => {
 exports.setPassword = async (req, res) => {
   try {
     const id = normalizePositiveInt(req.params.id, 'id', true);
-    const password = normalizeRequiredString(req.body?.password, 120, 'password');
     const current = await fetchUserById(id);
     if (!current || !ALLOWED_ROLES.has(String(current.role || '').toLowerCase())) {
       return res.status(404).json({ message: 'Usuario no encontrado.' });
     }
-
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const rawPassword = normalizeRequiredString(req.body?.password, 128, 'password');
+    const password = validatePassword(rawPassword, { email: current.email });
+    const passwordHash = await hashPassword(password);
     await db.execute('UPDATE usuarios SET password_hash = ? WHERE id = ?', [passwordHash, id]);
     await invalidateAdminSessions(id);
     await recordAdminActivity({

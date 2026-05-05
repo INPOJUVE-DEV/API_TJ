@@ -46,7 +46,7 @@ CREATE TABLE usuarios (
   telefono VARCHAR(20),
   municipio_id INT,
   password_hash VARCHAR(255) NULL,
-  role ENUM('admin','reader','scanner') NOT NULL DEFAULT 'reader',
+  role ENUM('admin','reader','scanner','beneficiary') NOT NULL DEFAULT 'beneficiary',
   creditos INT NOT NULL DEFAULT 0,
   foto_url VARCHAR(255),
   portada_url VARCHAR(255),
@@ -239,6 +239,12 @@ CREATE TABLE beneficios (
   horario VARCHAR(120),
   lat DECIMAL(10,8),
   lng DECIMAL(11,8),
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_visible_to_beneficiary TINYINT(1) NOT NULL DEFAULT 1,
+  published_at DATETIME NULL,
+  headline VARCHAR(160) NULL,
+  summary VARCHAR(255) NULL,
+  image_url VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_beneficios_nombre (nombre),
   FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -305,8 +311,21 @@ CREATE TABLE beneficiarios_sync_log (
 CREATE TABLE refresh_tokens (
   id INT AUTO_INCREMENT PRIMARY KEY,
   usuario_id INT NOT NULL,
-  refresh_token VARCHAR(255) NOT NULL UNIQUE,
+  refresh_token CHAR(64) NOT NULL UNIQUE,
   expiry_date DATETIME NOT NULL,
+  revoked_at DATETIME NULL,
+  rotated_from INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE password_reset_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  consumed_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     ON DELETE CASCADE

@@ -10,6 +10,9 @@ function validateRuntimeConfig() {
   getRequiredEnv('JWT_SECRET');
   getRequiredEnv('CURP_HASH_SECRET');
   getRequiredEnv('FIELD_ENCRYPTION_KEY');
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    getRequiredEnv('ADMIN_JWT_SECRET');
+  }
 }
 
 module.exports = {

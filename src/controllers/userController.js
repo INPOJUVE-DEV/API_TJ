@@ -1,4 +1,4 @@
-﻿const db = require('../config/db');
+const db = require('../config/db');
 const {
   formatBarcodeValue,
   getOrCreateActiveToken
@@ -41,9 +41,9 @@ exports.getProfile = async (req, res) => {
 
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.creditos,
+      `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.creditos, u.role, u.status,
               u.foto_url AS fotoUrl, u.portada_url AS portadaUrl,
-              u.auth0_user_id AS auth0UserId, u.cardholder_sync_id AS cardholderSyncId,
+              u.cardholder_sync_id AS cardholderSyncId,
               m.nombre AS municipio, cs.tarjeta_numero AS tarjetaNumero
        FROM usuarios u
        LEFT JOIN municipios m ON u.municipio_id = m.id
@@ -66,6 +66,8 @@ exports.getProfile = async (req, res) => {
       id: user.id,
       nombre: user.nombre,
       apellidos: user.apellidos,
+      role: user.role,
+      status: user.status,
       edad: null,
       creditos: Number(user.creditos || 0),
       barcodeValue,
@@ -74,7 +76,6 @@ exports.getProfile = async (req, res) => {
       telefono: EXPOSE_PII ? user.telefono : maskPhone(user.telefono),
       fotoUrl: user.fotoUrl || null,
       portadaUrl: user.portadaUrl || null,
-      auth0UserId: user.auth0UserId || null,
       cardholderSyncId: user.cardholderSyncId || null,
       tarjetaNumero: user.tarjetaNumero || null
     };
