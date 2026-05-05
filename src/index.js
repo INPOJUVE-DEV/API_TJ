@@ -16,36 +16,50 @@ app.use(helmet());
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
 const ADMIN_FRONTEND_ORIGIN = process.env.ADMIN_FRONTEND_ORIGIN || FRONTEND_ORIGIN;
 
+function normalizeOrigin(origin) {
+  return String(origin || '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+function splitOriginEntries(value) {
+  return String(value || '')
+    .split(',')
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean);
+}
+
 function expandLocalOriginAliases(origin) {
-  if (!origin) {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) {
     return [];
   }
 
   try {
-    const url = new URL(origin);
+    const url = new URL(normalizedOrigin);
     const hostname = String(url.hostname || '').toLowerCase();
     const isLoopbackHost = hostname === 'localhost' || hostname === '127.0.0.1';
 
     if (!isLoopbackHost) {
-      return [origin];
+      return [normalizedOrigin];
     }
 
     const variants = ['localhost', '127.0.0.1'].map((alias) => {
-      const aliasUrl = new URL(origin);
+      const aliasUrl = new URL(normalizedOrigin);
       aliasUrl.hostname = alias;
-      return aliasUrl.toString().replace(/\/$/, '');
+      return normalizeOrigin(aliasUrl.toString());
     });
 
     return Array.from(new Set(variants));
   } catch {
-    return [origin];
+    return [normalizedOrigin];
   }
 }
 
 function buildAllowedOrigins(...origins) {
   return new Set(
     origins
-      .filter(Boolean)
+      .flatMap((origin) => splitOriginEntries(origin))
       .flatMap((origin) => expandLocalOriginAliases(origin))
   );
 }
@@ -54,7 +68,7 @@ const publicOrigins = buildAllowedOrigins(FRONTEND_ORIGIN, ADMIN_FRONTEND_ORIGIN
 const adminOrigins = buildAllowedOrigins(ADMIN_FRONTEND_ORIGIN);
 
 function corsOptionsDelegate(req, callback) {
-  const requestOrigin = req.header('Origin');
+  const requestOrigin = normalizeOrigin(req.header('Origin'));
   const isAdminPath = (req.path || '').startsWith('/api/v1/admin');
   const allowedOrigins = isAdminPath ? adminOrigins : publicOrigins;
 
