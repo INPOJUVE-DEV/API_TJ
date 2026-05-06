@@ -117,6 +117,7 @@ Este modulo consume el CRUD actual de `beneficios`, presentado en UI como `Conve
 - Campos obligatorios claramente marcados.
 - Coordenadas opcionales, pero validadas si se capturan.
 - Prevencion de doble envio.
+- `categoria` y `municipio` deben salir de catalogos administrables, no de texto libre.
 
 ## 5.4 Usuarios internos
 
@@ -364,6 +365,11 @@ La app debe instalarse como PWA, pero en el MVP su prioridad no es operar offlin
 | `GET` | `/api/v1/admin/session` | Perfil admin con rol y permisos |
 | `GET` | `/api/v1/admin/dashboard` | Indicadores del tablero |
 | `GET` | `/api/v1/admin/lookups` | Catalogos para formularios |
+| `GET` | `/api/v1/admin/lookups/:lookup` | Lista un catalogo |
+| `GET` | `/api/v1/admin/lookups/:lookup/:id` | Detalle de item de catalogo |
+| `POST` | `/api/v1/admin/lookups/:lookup` | Alta de item de catalogo |
+| `PATCH` | `/api/v1/admin/lookups/:lookup/:id` | Edicion de item de catalogo |
+| `DELETE` | `/api/v1/admin/lookups/:lookup/:id` | Baja de item de catalogo |
 | `GET` | `/api/v1/admin/users` | Lista de usuarios internos |
 | `POST` | `/api/v1/admin/users` | Alta de usuario interno |
 | `GET` | `/api/v1/admin/users/:id` | Detalle de usuario |

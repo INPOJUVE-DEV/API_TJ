@@ -267,6 +267,28 @@ Cambio recomendado:
 
 - Agregar `GET /api/v1/admin/lookups?include=municipios,categorias` para poblar combos sin hardcode.
 
+Catalogos base ya administrables:
+
+- `GET /api/v1/admin/lookups`
+- `GET /api/v1/admin/lookups/:lookup`
+- `GET /api/v1/admin/lookups/:lookup/:id`
+- `POST /api/v1/admin/lookups/:lookup`
+- `PATCH /api/v1/admin/lookups/:lookup/:id`
+- `DELETE /api/v1/admin/lookups/:lookup/:id`
+
+Donde `:lookup` puede ser:
+
+- `categorias`
+- `municipios`
+
+Payload de alta y edicion:
+
+```json
+{
+  "nombre": "Restaurantes"
+}
+```
+
 ## 6.3 Usuarios internos
 
 La consola necesita administrar la tabla `usuarios`, pero hoy el API solo expone `GET /me`.
@@ -503,6 +525,11 @@ Contratos nuevos requeridos:
 | `GET` | `/api/v1/admin/session` | Obtener rol, estado y permisos |
 | `GET` | `/api/v1/admin/dashboard` | Resumen operativo |
 | `GET` | `/api/v1/admin/lookups` | Catalogos base para formularios |
+| `GET` | `/api/v1/admin/lookups/:lookup` | Lista un catalogo base |
+| `GET` | `/api/v1/admin/lookups/:lookup/:id` | Detalle de item de catalogo |
+| `POST` | `/api/v1/admin/lookups/:lookup` | Alta de item de catalogo |
+| `PATCH` | `/api/v1/admin/lookups/:lookup/:id` | Edicion de item de catalogo |
+| `DELETE` | `/api/v1/admin/lookups/:lookup/:id` | Baja de item de catalogo |
 | `GET` | `/api/v1/admin/users` | Administrar usuarios internos |
 | `POST` | `/api/v1/admin/users` | Alta de usuarios internos |
 | `GET` | `/api/v1/admin/users/:id` | Detalle de usuario |
