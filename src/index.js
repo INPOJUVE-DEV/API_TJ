@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const { validateRuntimeConfig } = require('./config/runtimeConfig');
 const safeLogger = require('./utils/safeLogger');
 const { bootstrapIntegrationClients } = require('./services/integrationClientBootstrapService');
+const integrationSurfaceGuard = require('./middleware/integrationSurfaceGuard');
 
 validateRuntimeConfig();
 
@@ -89,6 +90,7 @@ function corsOptionsDelegate(req, callback) {
 app.use(cors(corsOptionsDelegate));
 
 app.use(express.json());
+app.use(integrationSurfaceGuard);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ ok: true });

@@ -11,7 +11,6 @@
     "seed:admin-demo": "node scripts/seed-admin-demo.js",
     "seed:frontend-local": "node scripts/seed-frontend-local.js",
     "db:ensure": "node scripts/ensure-schema.js",
-    "railway:predeploy": "node scripts/ensure-schema.js",
     "seed:if-needed": "node scripts/seed-if-needed.js",
     "fixture:cardholders-sync": "node scripts/build-cardholders-sync-fixture.js",
     "inject:cardholders-sync": "node scripts/inject-cardholders-sync.js",
@@ -22,6 +21,8 @@
     "keygen:integration": "node scripts/generate-integration-keypair.js",
     "token:integration": "node scripts/build-integration-token.js",
     "smoke:postman": "node scripts/run-postman-smoke.js",
+    "bootstrap:users": "node scripts/bootstrap-users.js",
+    "railway:predeploy": "npm run db:ensure && npm run bootstrap:users",
     "start:render": "npm run db:ensure && npm run seed:if-needed && npm start"
   },
   "dependencies": {

@@ -315,7 +315,7 @@ describe('Flujo completo de integracion con JWT RS256', () => {
     );
   });
 
-  test('unidad_informatica no puede invocar sync por scope', async () => {
+  test('unidad_informatica no puede invocar sync fuera de su superficie permitida', async () => {
     const badToken = makeToken('unidad_informatica', 'cardholders.lookup', 'bad-scope-jti-1');
     const response = await request(app)
       .post('/api/v1/cardholders/sync')
@@ -323,7 +323,9 @@ describe('Flujo completo de integracion con JWT RS256', () => {
       .send({ sync_id: 'BAD', items: [] });
 
     expect(response.statusCode).toBe(403);
-    expect(response.body).toEqual({ message: 'Permisos insuficientes.' });
+    expect(response.body).toEqual({
+      message: 'Token de integracion no autorizado para este endpoint.'
+    });
   });
 
   test('rechaza replay de jti', async () => {
@@ -354,7 +356,41 @@ describe('Flujo completo de integracion con JWT RS256', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.statusCode).toBe(403);
-    expect(response.body).toEqual({ message: 'Acceso admin denegado' });
+    expect(response.body).toEqual({
+      message: 'Token de integracion no autorizado para este endpoint.'
+    });
+  });
+
+  test('unidad_informatica no puede reutilizar su token en rutas publicas fuera de su superficie', async () => {
+    const token = makeToken(
+      'unidad_informatica',
+      'cardholders.lookup',
+      'public-route-jti-1'
+    );
+
+    const response = await request(app)
+      .post('/api/v1/cardholders/verify-activation')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tarjeta_numero: 'TJ-0001', curp: 'HERL020101MSPNRZ01' });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body).toEqual({
+      message: 'Token de integracion no autorizado para este endpoint.'
+    });
+  });
+
+  test('sys_ipj no puede salir de su endpoint de sync', async () => {
+    const token = makeToken('sys_ipj', 'cardholders.sync', 'sys-public-route-jti-1');
+
+    const response = await request(app)
+      .post('/api/v1/cardholders/lookup')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ curp: 'MELR000202MSPSRD06' });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body).toEqual({
+      message: 'Token de integracion no autorizado para este endpoint.'
+    });
   });
 
   test('staging rechaza payload sin discapacidad obligatoria', async () => {

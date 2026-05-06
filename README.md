@@ -67,6 +67,12 @@ npm run seed
 npm run db:ensure
 ```
 
+Bootstrap operativo sin shell:
+
+```bash
+npm run bootstrap:users
+```
+
 `scripts/seed.js` es idempotente y asegura, entre otras, estas tablas:
 
 - `usuarios`
@@ -84,6 +90,32 @@ Datos demo principales:
 | Ana | `ana.hernandez@example.com` | `Test1234!` | `admin` |
 | Carlos | `carlos.lopez@example.com` | `Secret456!` | `beneficiary` |
 | Maria | `maria.soto@example.com` | `Password789!` | `reader` |
+
+## Bootstrap en Railway
+
+Si no tienes shell en Railway, el deploy puede crear el primer admin y beneficiarios de prueba de forma idempotente.
+
+1. Define `BOOTSTRAP_USERS_ON_DEPLOY=true`.
+2. Para el admin, define al menos `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD`.
+3. Para beneficiarios, define `BOOTSTRAP_BENEFICIARIES_JSON` con un arreglo JSON.
+4. Haz redeploy del servicio.
+5. Cuando termine, elimina o apaga esas variables para no reescribir passwords en deploys futuros.
+
+Ejemplo de `BOOTSTRAP_BENEFICIARIES_JSON`:
+
+```json
+[
+  {
+    "curp": "ABCD010101HSPXXX01",
+    "tarjeta_numero": "TJ-PROD-0005",
+    "email": "beneficiario5@example.com",
+    "password": "BenefProd#2026E",
+    "nombre": "Beneficiario",
+    "apellidos": "Cinco",
+    "municipio_id": 1
+  }
+]
+```
 
 ## Flujos principales
 
