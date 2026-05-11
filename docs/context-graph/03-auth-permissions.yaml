@@ -1,0 +1,49 @@
+roles:
+  admin:
+    capabilities:
+      - admin_routes
+      - create_users
+      - update_users
+      - set_passwords
+      - push_staging_records
+
+  reader:
+    capabilities:
+      - readonly_admin_routes
+      - list_users
+      - inspect_staging_records
+
+  beneficiary:
+    capabilities:
+      - login
+      - refresh_session
+      - get_profile
+      - activate_account
+
+  scanner:
+    capabilities:
+      - get_profile
+
+route_guards:
+  public_auth:
+    middleware:
+      - loginLimiter
+      - loginIdentifierLimiter
+      - otpLimiter
+      - noStore
+
+  admin_surface:
+    middleware:
+      - verifyAdminToken
+      - authorizeRole
+
+  integration_surface:
+    middleware:
+      - requireIntegrationScope
+      - integrationClientRateLimit
+      - integrationSurfaceGuard
+
+integration_scopes:
+  - cardholders.lookup
+  - cardholders.sync
+  - beneficiarios.staging.create
