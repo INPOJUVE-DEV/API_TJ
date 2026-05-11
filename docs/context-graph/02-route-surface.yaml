@@ -1,0 +1,68 @@
+routes:
+  auth:
+    base: /api/v1/auth
+    file: src/routes/auth.js
+    endpoints:
+      - POST /login
+      - POST /refresh
+      - POST /logout
+      - POST /forgot-password
+      - POST /reset-password
+      - POST /otp/send
+      - POST /otp/verify
+
+  user:
+    base: /api/v1
+    file: src/routes/user.js
+    endpoints:
+      - GET /me
+
+  register:
+    base: /api/v1
+    file: src/routes/register.js
+    status: deprecated
+    endpoints:
+      - POST /register
+      - POST /register/register
+
+  cardholders:
+    base: /api/v1/cardholders
+    file: src/routes/cardholders.js
+    endpoints:
+      - POST /lookup
+      - POST /sync
+      - POST /verify-activation
+      - POST /complete-activation
+      - POST /:curp/account
+
+  beneficiarios_staging:
+    base: /api/v1/beneficiarios-staging
+    file: src/routes/beneficiariosStaging.js
+    endpoints:
+      - POST /
+      - GET /
+      - DELETE /expired
+      - POST /:id/push
+
+  admin_auth:
+    base: /api/v1/admin/auth
+    file: src/routes/adminAuth.js
+
+  admin_users:
+    base: /api/v1/admin
+    file: src/routes/adminUsers.js
+    endpoints:
+      - GET /users
+      - GET /users/:id
+      - POST /users
+      - PATCH /users/:id
+      - POST /users/:id/set-password
+
+  admin_beneficiarios_staging:
+    base: /api/v1/admin
+    file: src/routes/adminBeneficiariosStaging.js
+    endpoints:
+      - GET /beneficiarios-staging
+      - GET /beneficiarios-staging/:id
+      - GET /beneficiarios-staging/:id/attempts
+      - POST /beneficiarios-staging/:id/push
