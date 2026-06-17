@@ -1,0 +1,36 @@
+flows:
+  beneficiary_activation:
+    steps:
+      - validate_beneficiary_presence_in_Sys_IPJ
+      - verify_CURP_match
+      - verify_activation_state
+      - create_local_account
+      - allow_authentication
+
+  external_beneficiary_sync:
+    steps:
+      - external_system_calls_staging_endpoint
+      - payload_saved_to_staging
+      - admin_reviews_payload
+      - admin_pushes_payload
+      - final_insert_or_sync_occurs
+
+  login_flow:
+    steps:
+      - login_request
+      - credential_validation
+      - jwt_generation
+      - refresh_flow
+      - protected_resource_access
+
+  forgot_password_flow:
+    steps:
+      - forgot_password_request
+      - limiter_validation
+      - otp_or_token_generation
+      - reset_password
+
+constraints:
+  - Sys_IPJ_should_remain_source_of_truth_for_beneficiary_registration
+  - API_TJ_should_not_duplicate_full_Sys_IPJ_logic
+  - account_creation_requires_beneficiary_validation

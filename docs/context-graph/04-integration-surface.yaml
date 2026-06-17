@@ -1,0 +1,42 @@
+integration_model:
+  principle:
+    - API_TJ_does_not_own_full_Sys_IPJ_database
+    - CURP_is_primary_cross_system_link
+    - integration_should_use_minimum_required_data
+
+external_systems:
+  Sys_IPJ:
+    role:
+      - beneficiary_source_of_truth
+      - registration_validation
+
+  APP_TARJETAJOVEN:
+    role:
+      - mobile_or_frontend_consumer
+      - account_access_surface
+
+integration_routes:
+  cardholders_lookup:
+    route: POST /api/v1/cardholders/lookup
+    scope: cardholders.lookup
+
+  cardholders_sync:
+    route: POST /api/v1/cardholders/sync
+    scope: cardholders.sync
+
+  beneficiarios_staging_create:
+    route: POST /api/v1/beneficiarios-staging
+    scope: beneficiarios.staging.create
+
+staging_strategy:
+  reason:
+    - avoid_direct_writes_to_final_tables
+    - validate_external_payloads_before_push
+    - preserve_auditability
+
+security:
+  requirements:
+    - scoped_integration_access
+    - integration_rate_limit
+    - audit_push_attempts
+    - validate_CURP_before_account_link

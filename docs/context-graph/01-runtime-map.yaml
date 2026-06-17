@@ -1,0 +1,53 @@
+project:
+  repo: INPOJUVE-DEV/API_TJ
+  name: tarjeta-joven-backend
+  runtime: nodejs
+  framework: express
+  database: mysql
+
+entrypoint:
+  file: src/index.js
+
+middlewares:
+  global:
+    - helmet
+    - cors
+    - express.json
+    - integrationSurfaceGuard
+
+cors:
+  public_origins:
+    env: FRONTEND_ORIGIN
+  admin_origins:
+    env: ADMIN_FRONTEND_ORIGIN
+
+security:
+  auth:
+    - jwt
+    - admin_jwt
+    - integration_scope_auth
+
+rate_limiters:
+  - loginLimiter
+  - loginIdentifierLimiter
+  - otpLimiter
+  - refreshLimiter
+  - forgotPasswordLimiter
+  - resetPasswordLimiter
+  - integrationClientRateLimit
+
+deployment:
+  scripts:
+    - railway:predeploy
+    - start:render
+    - db:ensure
+    - bootstrap:users
+
+services:
+  bootstrap:
+    - bootstrapIntegrationClients
+
+healthcheck:
+  path: /health
+  response:
+    ok: true

@@ -1,0 +1,40 @@
+entities:
+  User:
+    purpose:
+      - authenticated_platform_access
+      - admin_or_operational_access
+    roles:
+      - admin
+      - reader
+      - scanner
+      - beneficiary
+
+  Cardholder:
+    purpose:
+      - tarjeta_joven_owner
+      - beneficiary_link
+    identifiers:
+      - CURP
+
+  BeneficiarioStaging:
+    purpose:
+      - temporary_external_payload_storage
+      - validation_before_push
+      - integration_auditability
+
+  IntegrationClient:
+    purpose:
+      - scoped_external_access
+      - controlled_system_integration
+
+  QR:
+    purpose:
+      - identification_or_validation_surface
+    pending_review:
+      - generation_strategy
+      - validation_strategy
+      - expiration_rules
+
+cross_system_links:
+  primary_identifier:
+    - CURP
