@@ -82,6 +82,7 @@ describe('sysIpjClient', () => {
     const [url, options] = global.fetch.mock.calls[0];
     expect(url).toBe('http://127.0.0.1/api/api-tj/inbound');
     expect(options.method).toBe('POST');
+    expect(options.headers['Content-Type']).toBe('application/json');
     expect(options.headers['Idempotency-Key']).toBe('INF-1');
     expect(options.headers.Authorization).toMatch(/^Bearer\s+/);
 
@@ -108,6 +109,45 @@ describe('sysIpjClient', () => {
       },
       beneficiario: payload
     });
+  });
+
+  test('usa beneficiarios.staging.push como scope por default', async () => {
+    const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privateKey = pair.privateKey.export({ format: 'pem', type: 'pkcs8' });
+    const publicKey = pair.publicKey.export({ format: 'pem', type: 'spki' });
+    const privateKeyPath = path.join(os.tmpdir(), `api-tj-push-default-${Date.now()}.pem`);
+
+    fs.writeFileSync(privateKeyPath, privateKey);
+
+    process.env.SYS_IPJ_PUSH_URL = 'http://127.0.0.1/api/api-tj/inbound';
+    process.env.API_TJ_TO_SYS_IPJ_PRIVATE_KEY_PATH = privateKeyPath;
+    process.env.API_TJ_TO_SYS_IPJ_JWT_KID = 'api_tj-current';
+    process.env.API_TJ_TO_SYS_IPJ_ISSUER = 'api_tj';
+    process.env.API_TJ_TO_SYS_IPJ_SUBJECT = 'api_tj';
+    process.env.API_TJ_TO_SYS_IPJ_AUDIENCE = 'sys_ipj';
+    delete process.env.API_TJ_TO_SYS_IPJ_SCOPE;
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 202,
+      text: jest.fn().mockResolvedValue('{}')
+    });
+
+    const { pushBeneficiario } = require('../src/services/sysIpjClient');
+    await pushBeneficiario({
+      externalRequestId: 'INF-DEFAULT-1',
+      payload: { nombre: 'Prueba' }
+    });
+
+    const [, options] = global.fetch.mock.calls[0];
+    const token = options.headers.Authorization.replace(/^Bearer\s+/i, '');
+    const decoded = jwt.verify(token, publicKey, {
+      algorithms: ['RS256'],
+      audience: 'sys_ipj',
+      issuer: 'api_tj'
+    });
+
+    expect(decoded.scope).toBe('beneficiarios.staging.push');
   });
 
   test('reporta error claro si falta la llave privada de salida', async () => {

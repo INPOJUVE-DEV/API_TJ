@@ -134,9 +134,6 @@ function validateBeneficiarioPayload(payload) {
 }
 
 function mapSysIpjStatus(result) {
-  if (!result.ok) {
-    return 'error';
-  }
   if (result.status >= 200 && result.status < 300) {
     return 'accepted';
   }
