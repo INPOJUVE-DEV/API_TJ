@@ -70,6 +70,7 @@ function normalizeBeneficiarioPayload(body) {
     apellido_paterno: requiredString(beneficiario, 'apellido_paterno'),
     apellido_materno: requiredString(beneficiario, 'apellido_materno'),
     fecha_nacimiento: requiredString(beneficiario, 'fecha_nacimiento'),
+    folio_tarjeta: optionalString(beneficiario, 'folio_tarjeta'),
     sexo: requiredString(beneficiario, 'sexo'),
     discapacidad: requiredBoolean(beneficiario, 'discapacidad'),
     id_ine: requiredString(beneficiario, 'id_ine'),

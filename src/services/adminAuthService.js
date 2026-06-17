@@ -3,10 +3,14 @@ const db = require('../config/db');
 const {
   ADMIN_JWT_SECRET,
   ADMIN_TOKEN_AUDIENCE,
-  ADMIN_TOKEN_ISSUER
+  ADMIN_TOKEN_ISSUER,
+  ADMIN_STREAM_TOKEN_AUDIENCE,
+  ADMIN_STREAM_TOKEN_ISSUER,
+  getAdminStreamTokenVerifyOptions
 } = require('../config/tokenConfig');
 
 const ADMIN_JWT_EXPIRATION = process.env.ADMIN_JWT_EXPIRATION || '8h';
+const ADMIN_STREAM_TOKEN_EXPIRATION = process.env.ADMIN_STREAM_TOKEN_EXPIRATION || '2m';
 const ADMIN_ROLES = new Set(['admin', 'reader']);
 
 const ROLE_PERMISSIONS = {
@@ -40,6 +44,35 @@ function buildAdminToken(user) {
       audience: ADMIN_TOKEN_AUDIENCE
     }
   );
+}
+
+function buildAdminStreamToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      sub: String(user.id),
+      role: user.role,
+      status: user.status,
+      token_type: 'admin_stream',
+      session_version: Number(user.sessionVersion ?? user.session_version ?? 0)
+    },
+    ADMIN_JWT_SECRET,
+    {
+      expiresIn: ADMIN_STREAM_TOKEN_EXPIRATION,
+      issuer: ADMIN_STREAM_TOKEN_ISSUER,
+      audience: ADMIN_STREAM_TOKEN_AUDIENCE
+    }
+  );
+}
+
+function verifyAdminStreamToken(token) {
+  const decoded = jwt.verify(token, ADMIN_JWT_SECRET, getAdminStreamTokenVerifyOptions());
+  if (decoded.token_type !== 'admin_stream') {
+    const error = new Error('Stream admin invalido.');
+    error.statusCode = 401;
+    throw error;
+  }
+  return decoded;
 }
 
 function getPermissions(role) {
@@ -143,7 +176,9 @@ function buildSessionResponse(user) {
 
 module.exports = {
   ADMIN_JWT_EXPIRATION,
+  ADMIN_STREAM_TOKEN_EXPIRATION,
   buildAdminToken,
+  buildAdminStreamToken,
   buildSessionResponse,
   getPermissions,
   getUserByEmail,
@@ -151,6 +186,7 @@ module.exports = {
   invalidateAdminSessions,
   isAdminRole,
   assertValidAdminSession,
+  verifyAdminStreamToken,
   touchLoginSuccess,
   touchLoginFailure
 };

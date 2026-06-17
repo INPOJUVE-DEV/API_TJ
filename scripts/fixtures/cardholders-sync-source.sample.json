@@ -4,26 +4,41 @@
   "items": [
     {
       "curp": "MELR000202MSPSRD06",
+      "nombres": "Melissa",
+      "apellido": "Rios",
+      "municipio_id": 2,
       "tarjeta_numero": "TJ-SIM-0001",
       "status": "active"
     },
     {
       "curp": "SAQP950101HSPQRP07",
+      "nombres": "Santiago",
+      "apellido": "Quintero",
+      "municipio_id": 1,
       "tarjeta_numero": "TJ-SIM-0002",
       "status": "inactive"
     },
     {
       "curp": "LOMC990505HSPLPM02",
+      "nombres": "Carlos",
+      "apellido": "Lopez",
+      "municipio_id": 3,
       "tarjeta_numero": "TJ-SIM-0003",
       "status": "active"
     },
     {
       "curp": "HERL020101MSPNRZ01",
+      "nombres": "Ana",
+      "apellido": "Hernandez",
+      "municipio_id": 1,
       "tarjeta_numero": "TJ-SIM-0004",
       "status": "blocked"
     },
     {
       "curp": "CATL021102HSPCMT05",
+      "nombres": "Luis",
+      "apellido": "Camacho",
+      "municipio_id": 3,
       "tarjeta_numero": "TJ-SIM-0005",
       "status": "active"
     }

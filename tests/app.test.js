@@ -2,6 +2,7 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'test-secret';
 process.env.CURP_HASH_SECRET = process.env.CURP_HASH_SECRET || 'curp-test-secret';
 process.env.FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || 'field-test-secret';
 
@@ -55,7 +56,7 @@ describe('Pruebas de API', () => {
       token_type: 'admin',
       session_version: 0
     },
-    process.env.JWT_SECRET,
+    process.env.ADMIN_JWT_SECRET,
     {
       issuer: 'api_tj:admin',
       audience: 'api_tj:admin'

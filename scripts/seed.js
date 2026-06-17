@@ -3,6 +3,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { getDbConfig } = require('../src/config/dbOptions');
 const { buildCurpLookup } = require('../src/services/curpHashService');
+const { encryptString } = require('../src/services/fieldEncryptionService');
 const { hashPassword } = require('../src/services/passwordService');
 const { buildDeviceTestFixtures } = require('./fixtures/deviceTestBeneficiaries');
 
@@ -38,6 +39,15 @@ function normalizeFixtureMunicipioName(value) {
     return MUNICIPIOS[1];
   }
   return value;
+}
+
+function extractPrimaryLastName(value) {
+  const normalized = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return normalized[0] || null;
 }
 
 const DEVICE_TEST_FIXTURES = buildDeviceTestFixtures({
@@ -285,27 +295,6 @@ async function ensureSchema(pool) {
         ON UPDATE CASCADE
         ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    `CREATE TABLE IF NOT EXISTS cardholders (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      curp VARCHAR(20) NOT NULL UNIQUE,
-      nombres VARCHAR(120) NOT NULL,
-      apellidos VARCHAR(150) NOT NULL,
-      municipio_id INT,
-      tarjeta_numero VARCHAR(50),
-      status ENUM('active','inactive','blocked') DEFAULT 'active',
-      lookup_attempts INT DEFAULT 0,
-      last_lookup_attempt_at DATETIME NULL,
-      lookup_blocked_until DATETIME NULL,
-      pending_account_until DATETIME NULL,
-      account_user_id INT UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (municipio_id) REFERENCES municipios(id)
-        ON UPDATE CASCADE
-        ON DELETE SET NULL,
-      FOREIGN KEY (account_user_id) REFERENCES usuarios(id)
-        ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS beneficios (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nombre VARCHAR(160) NOT NULL,
@@ -332,20 +321,18 @@ async function ensureSchema(pool) {
         ON UPDATE CASCADE
         ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    `CREATE TABLE IF NOT EXISTS cardholder_audit_logs (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      cardholder_id INT NOT NULL,
-      action ENUM('lookup','account_created') NOT NULL,
-      ip_address VARCHAR(45),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (cardholder_id) REFERENCES cardholders(id)
-        ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS cardholders_sync (
       id INT AUTO_INCREMENT PRIMARY KEY,
       curp_hash CHAR(64) NOT NULL UNIQUE,
       curp_masked VARCHAR(20) NOT NULL,
       tarjeta_numero VARCHAR(50) NOT NULL UNIQUE,
+      nombres_ciphertext TEXT NULL,
+      nombres_iv VARCHAR(64) NULL,
+      nombres_tag VARCHAR(64) NULL,
+      apellido_ciphertext TEXT NULL,
+      apellido_iv VARCHAR(64) NULL,
+      apellido_tag VARCHAR(64) NULL,
+      municipio_id INT NULL,
       status ENUM('active','inactive','blocked') NOT NULL DEFAULT 'active',
       sync_source VARCHAR(120),
       synced_at DATETIME NOT NULL,
@@ -354,6 +341,9 @@ async function ensureSchema(pool) {
       activation_verified_until DATETIME NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (municipio_id) REFERENCES municipios(id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL,
       FOREIGN KEY (account_user_id) REFERENCES usuarios(id)
         ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
@@ -614,6 +604,18 @@ async function ensureColumn(pool, dbName, table, column, definition) {
   }
 }
 
+async function tableExists(pool, dbName, table) {
+  const [rows] = await pool.execute(
+    `SELECT 1
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+     LIMIT 1`,
+    [dbName, table]
+  );
+
+  return rows.length > 0;
+}
+
 async function ensureSolicitudesColumns(pool, dbName) {
   await ensureColumn(pool, dbName, 'solicitudes_registro', 'username', 'VARCHAR(150) DEFAULT NULL AFTER curp');
   await ensureColumn(pool, dbName, 'solicitudes_registro', 'calle', 'VARCHAR(150) DEFAULT NULL AFTER username');
@@ -696,6 +698,13 @@ async function ensureNewPatchColumns(pool, dbName) {
     'activation_verified_until',
     'DATETIME NULL'
   );
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'nombres_ciphertext', 'TEXT NULL AFTER tarjeta_numero');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'nombres_iv', 'VARCHAR(64) NULL AFTER nombres_ciphertext');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'nombres_tag', 'VARCHAR(64) NULL AFTER nombres_iv');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'apellido_ciphertext', 'TEXT NULL AFTER nombres_tag');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'apellido_iv', 'VARCHAR(64) NULL AFTER apellido_ciphertext');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'apellido_tag', 'VARCHAR(64) NULL AFTER apellido_iv');
+  await ensureColumn(pool, dbName, 'cardholders_sync', 'municipio_id', 'INT NULL AFTER apellido_tag');
   await ensureColumn(pool, dbName, 'beneficios', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
   await ensureColumn(
     pool,
@@ -708,6 +717,119 @@ async function ensureNewPatchColumns(pool, dbName) {
   await ensureColumn(pool, dbName, 'beneficios', 'headline', 'VARCHAR(160) NULL');
   await ensureColumn(pool, dbName, 'beneficios', 'summary', 'VARCHAR(255) NULL');
   await ensureColumn(pool, dbName, 'beneficios', 'image_url', 'VARCHAR(255) NULL');
+  await ensureCardholdersSyncMunicipioForeignKey(pool, dbName);
+  await backfillLegacyCardholdersIntoSync(pool, dbName);
+  await backfillCardholdersSyncProfileFromUsers(pool);
+  await dropLegacyCardholdersTables(pool, dbName);
+}
+
+async function ensureCardholdersSyncMunicipioForeignKey(pool, dbName) {
+  const [existing] = await pool.execute(
+    `SELECT CONSTRAINT_NAME
+     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'cardholders_sync'
+       AND COLUMN_NAME = 'municipio_id'
+       AND REFERENCED_TABLE_NAME = 'municipios'
+     LIMIT 1`,
+    [dbName]
+  );
+
+  if (existing.length === 0) {
+    await pool.execute(
+      `ALTER TABLE cardholders_sync
+       ADD CONSTRAINT fk_cardholders_sync_municipio
+       FOREIGN KEY (municipio_id) REFERENCES municipios(id)
+       ON UPDATE CASCADE
+       ON DELETE SET NULL`
+    );
+  }
+}
+
+async function backfillLegacyCardholdersIntoSync(pool, dbName) {
+  if (!(await tableExists(pool, dbName, 'cardholders'))) {
+    return;
+  }
+
+  const [legacyRows] = await pool.query(
+    `SELECT curp, nombres, apellidos, municipio_id
+     FROM cardholders`
+  );
+
+  for (const row of legacyRows) {
+    const { curpHash } = buildCurpLookup(row.curp);
+    const encryptedNombres = encryptString(row.nombres);
+    const encryptedApellido = encryptString(extractPrimaryLastName(row.apellidos));
+
+    await pool.execute(
+      `UPDATE cardholders_sync
+       SET nombres_ciphertext = COALESCE(nombres_ciphertext, ?),
+           nombres_iv = COALESCE(nombres_iv, ?),
+           nombres_tag = COALESCE(nombres_tag, ?),
+           apellido_ciphertext = COALESCE(apellido_ciphertext, ?),
+           apellido_iv = COALESCE(apellido_iv, ?),
+           apellido_tag = COALESCE(apellido_tag, ?),
+           municipio_id = COALESCE(municipio_id, ?)
+       WHERE curp_hash = ?`,
+      [
+        encryptedNombres?.payload_ciphertext || null,
+        encryptedNombres?.payload_iv || null,
+        encryptedNombres?.payload_tag || null,
+        encryptedApellido?.payload_ciphertext || null,
+        encryptedApellido?.payload_iv || null,
+        encryptedApellido?.payload_tag || null,
+        row.municipio_id || null,
+        curpHash
+      ]
+    );
+  }
+}
+
+async function backfillCardholdersSyncProfileFromUsers(pool) {
+  const [rows] = await pool.query(
+    `SELECT cs.id, u.nombre, u.apellidos, u.municipio_id
+     FROM cardholders_sync cs
+     JOIN usuarios u ON u.id = cs.account_user_id
+     WHERE cs.nombres_ciphertext IS NULL
+        OR cs.apellido_ciphertext IS NULL
+        OR cs.municipio_id IS NULL`
+  );
+
+  for (const row of rows) {
+    const encryptedNombres = encryptString(row.nombre);
+    const encryptedApellido = encryptString(extractPrimaryLastName(row.apellidos));
+
+    await pool.execute(
+      `UPDATE cardholders_sync
+       SET nombres_ciphertext = COALESCE(nombres_ciphertext, ?),
+           nombres_iv = COALESCE(nombres_iv, ?),
+           nombres_tag = COALESCE(nombres_tag, ?),
+           apellido_ciphertext = COALESCE(apellido_ciphertext, ?),
+           apellido_iv = COALESCE(apellido_iv, ?),
+           apellido_tag = COALESCE(apellido_tag, ?),
+           municipio_id = COALESCE(municipio_id, ?)
+       WHERE id = ?`,
+      [
+        encryptedNombres?.payload_ciphertext || null,
+        encryptedNombres?.payload_iv || null,
+        encryptedNombres?.payload_tag || null,
+        encryptedApellido?.payload_ciphertext || null,
+        encryptedApellido?.payload_iv || null,
+        encryptedApellido?.payload_tag || null,
+        row.municipio_id || null,
+        row.id
+      ]
+    );
+  }
+}
+
+async function dropLegacyCardholdersTables(pool, dbName) {
+  if (await tableExists(pool, dbName, 'cardholder_audit_logs')) {
+    await pool.execute('DROP TABLE cardholder_audit_logs');
+  }
+  if (await tableExists(pool, dbName, 'cardholders')) {
+    await pool.execute('DROP TABLE cardholders');
+  }
 }
 
 async function backfillBeneficiosPublicationFields(pool) {
@@ -767,61 +889,50 @@ async function seedMunicipios(pool) {
   }, {});
 }
 
-async function seedCardholders(pool, municipioMap) {
-  for (const holder of CARDHOLDERS) {
-    const municipioId = municipioMap[holder.municipio] || null;
-    await pool.execute(
-      `INSERT INTO cardholders
-        (curp, nombres, apellidos, municipio_id, tarjeta_numero, status)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-        nombres = VALUES(nombres),
-        apellidos = VALUES(apellidos),
-        municipio_id = VALUES(municipio_id),
-        tarjeta_numero = VALUES(tarjeta_numero),
-        status = VALUES(status)`,
-      [
-        holder.curp,
-        holder.nombres,
-        holder.apellidos,
-        municipioId,
-        holder.tarjeta || null,
-        holder.status || 'active'
-      ]
-    );
-  }
-  const [rows] = await pool.query('SELECT id, curp FROM cardholders');
-  return rows.reduce((acc, row) => {
-    acc[row.curp] = row.id;
-    return acc;
-  }, {});
-}
-
-async function seedCardholdersSync(pool, userMap) {
+async function seedCardholdersSync(pool, municipioMap, userMap) {
   for (const holder of CARDHOLDERS) {
     const { curpHash, curpMasked } = buildCurpLookup(holder.curp);
     const userId =
       (holder.linkToUserEmail && userMap.byEmail[holder.linkToUserEmail]) ||
       (holder.linkToUserCurp && userMap.byCurp[holder.linkToUserCurp]) ||
       null;
+    const encryptedNombres = encryptString(holder.nombres);
+    const encryptedApellido = encryptString(extractPrimaryLastName(holder.apellidos));
+    const municipioId = municipioMap[holder.municipio] || null;
     await pool.execute(
       `INSERT INTO cardholders_sync
-        (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at, account_user_id)
-       VALUES (?, ?, ?, ?, 'seed-backfill', ?, ?)
+        (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at, account_user_id,
+         nombres_ciphertext, nombres_iv, nombres_tag,
+         apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
+       VALUES (?, ?, ?, ?, 'seed-backfill', ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         curp_masked = VALUES(curp_masked),
         tarjeta_numero = VALUES(tarjeta_numero),
         status = VALUES(status),
         sync_source = VALUES(sync_source),
         synced_at = VALUES(synced_at),
-        account_user_id = COALESCE(cardholders_sync.account_user_id, VALUES(account_user_id))`,
+        account_user_id = COALESCE(cardholders_sync.account_user_id, VALUES(account_user_id)),
+        nombres_ciphertext = COALESCE(VALUES(nombres_ciphertext), cardholders_sync.nombres_ciphertext),
+        nombres_iv = COALESCE(VALUES(nombres_iv), cardholders_sync.nombres_iv),
+        nombres_tag = COALESCE(VALUES(nombres_tag), cardholders_sync.nombres_tag),
+        apellido_ciphertext = COALESCE(VALUES(apellido_ciphertext), cardholders_sync.apellido_ciphertext),
+        apellido_iv = COALESCE(VALUES(apellido_iv), cardholders_sync.apellido_iv),
+        apellido_tag = COALESCE(VALUES(apellido_tag), cardholders_sync.apellido_tag),
+        municipio_id = COALESCE(VALUES(municipio_id), cardholders_sync.municipio_id)`,
       [
         curpHash,
         curpMasked,
         holder.tarjeta || null,
         holder.status || 'active',
         new Date(),
-        userId
+        userId,
+        encryptedNombres?.payload_ciphertext || null,
+        encryptedNombres?.payload_iv || null,
+        encryptedNombres?.payload_tag || null,
+        encryptedApellido?.payload_ciphertext || null,
+        encryptedApellido?.payload_iv || null,
+        encryptedApellido?.payload_tag || null,
+        municipioId
       ]
     );
   }
@@ -987,33 +1098,6 @@ async function seedUsuarios(pool, municipioMap) {
   return { byEmail, byCurp };
 }
 
-async function linkCardholdersToUsers(pool, cardholderMap, userMap) {
-  for (const holder of CARDHOLDERS) {
-    if (!holder.linkToUserEmail && !holder.linkToUserCurp) {
-      continue;
-    }
-    const cardholderId = cardholderMap[holder.curp];
-    const userId =
-      (holder.linkToUserEmail && userMap.byEmail[holder.linkToUserEmail]) ||
-      (holder.linkToUserCurp && userMap.byCurp[holder.linkToUserCurp]) ||
-      userMap.byCurp[holder.curp];
-    if (cardholderId && userId) {
-      await pool.execute(
-        `UPDATE cardholders
-         SET account_user_id = NULL
-         WHERE account_user_id = ? AND id <> ?`,
-        [userId, cardholderId]
-      );
-      await pool.execute(
-        `UPDATE cardholders
-         SET account_user_id = ?
-         WHERE id = ?`,
-        [userId, cardholderId]
-      );
-    }
-  }
-}
-
 async function seedSolicitudes(pool, municipioMap) {
   for (const solicitud of SOLICITUDES) {
     const passwordHash = await hashPassword(solicitud.password);
@@ -1076,9 +1160,6 @@ async function main() {
     const municipioMap = await seedMunicipios(pool);
     console.log('Municipios listos.');
 
-    const cardholderMap = await seedCardholders(pool, municipioMap);
-    console.log('Cardholders listos.');
-
     const categoriaMap = await seedCategorias(pool);
     console.log('Categorias listas.');
 
@@ -1088,10 +1169,7 @@ async function main() {
     const userMap = await seedUsuarios(pool, municipioMap);
     console.log('Usuarios listos.');
 
-    await linkCardholdersToUsers(pool, cardholderMap, userMap);
-    console.log('Cardholders asociados a usuarios.');
-
-    await seedCardholdersSync(pool, userMap);
+    await seedCardholdersSync(pool, municipioMap, userMap);
     await syncUsuariosCardholderSyncIds(pool);
     console.log('Padron sincronizado de ejemplo listo.');
 

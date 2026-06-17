@@ -3,6 +3,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { ensureSchema, getDbConfig } = require('./seed');
 const { buildCurpLookup } = require('../src/services/curpHashService');
+const { encryptString } = require('../src/services/fieldEncryptionService');
 const { hashPassword, validatePassword } = require('../src/services/passwordService');
 
 const ENABLE_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -59,6 +60,15 @@ function normalizeEnum(value, allowedValues, field, fallback) {
     throw new Error(`${field} invalido.`);
   }
   return normalized;
+}
+
+function extractPrimaryLastName(value) {
+  const tokens = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return tokens[0] || null;
 }
 
 function parseBeneficiariesJson() {
@@ -232,18 +242,29 @@ async function getUserByEmail(connection, email) {
 
 async function upsertBeneficiary(connection, beneficiary) {
   let cardholder = await getExistingCardholder(connection, beneficiary);
+  const encryptedNombres = encryptString(beneficiary.nombre);
+  const encryptedApellido = encryptString(extractPrimaryLastName(beneficiary.apellidos));
 
   if (!cardholder) {
     const [result] = await connection.execute(
       `INSERT INTO cardholders_sync
-        (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at)
-       VALUES (?, ?, ?, ?, 'bootstrap-env', ?)`,
+        (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at,
+         nombres_ciphertext, nombres_iv, nombres_tag,
+         apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
+       VALUES (?, ?, ?, ?, 'bootstrap-env', ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         beneficiary.curpHash,
         beneficiary.curpMasked,
         beneficiary.tarjetaNumero,
         beneficiary.cardholderStatus,
-        new Date()
+        new Date(),
+        encryptedNombres?.payload_ciphertext || null,
+        encryptedNombres?.payload_iv || null,
+        encryptedNombres?.payload_tag || null,
+        encryptedApellido?.payload_ciphertext || null,
+        encryptedApellido?.payload_iv || null,
+        encryptedApellido?.payload_tag || null,
+        beneficiary.municipioId
       ]
     );
     cardholder = {
@@ -253,12 +274,26 @@ async function upsertBeneficiary(connection, beneficiary) {
   } else {
     await connection.execute(
       `UPDATE cardholders_sync
-       SET curp_masked = ?, status = ?, sync_source = 'bootstrap-env', synced_at = ?
+       SET curp_masked = ?, status = ?, sync_source = 'bootstrap-env', synced_at = ?,
+           nombres_ciphertext = COALESCE(?, nombres_ciphertext),
+           nombres_iv = COALESCE(?, nombres_iv),
+           nombres_tag = COALESCE(?, nombres_tag),
+           apellido_ciphertext = COALESCE(?, apellido_ciphertext),
+           apellido_iv = COALESCE(?, apellido_iv),
+           apellido_tag = COALESCE(?, apellido_tag),
+           municipio_id = COALESCE(?, municipio_id)
        WHERE id = ?`,
       [
         beneficiary.curpMasked,
         beneficiary.cardholderStatus,
         new Date(),
+        encryptedNombres?.payload_ciphertext || null,
+        encryptedNombres?.payload_iv || null,
+        encryptedNombres?.payload_tag || null,
+        encryptedApellido?.payload_ciphertext || null,
+        encryptedApellido?.payload_iv || null,
+        encryptedApellido?.payload_tag || null,
+        beneficiary.municipioId,
         cardholder.id
       ]
     );

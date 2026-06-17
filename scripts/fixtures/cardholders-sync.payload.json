@@ -2,32 +2,47 @@
   "sync_id": "CARDHOLDERS-SYNC-SAMPLE-2026-04-23",
   "items": [
     {
-      "curp_hash": "de2a2e327878455e0c176c891b5aa9a2fb0f2871b84d6a84a8a5022e41bb4b9a",
+      "curp_hash": "a8e1dca5834d6f4fd4c244518c706d68b1198bb58d55e3e3884674ea526ef865",
       "curp_masked": "MELR************06",
+      "nombres": "Melissa",
+      "apellido": "Rios",
+      "municipio_id": 2,
       "tarjeta_numero": "TJ-SIM-0001",
       "status": "active"
     },
     {
-      "curp_hash": "ade62e0c2d1124bb62c884a119471be421951b543e8a9033386681c29e3e9e3d",
+      "curp_hash": "ed8b592432edae34905a034804aa4366aeb862ef35cb5dd47524c1461dc37b31",
       "curp_masked": "SAQP************07",
+      "nombres": "Santiago",
+      "apellido": "Quintero",
+      "municipio_id": 1,
       "tarjeta_numero": "TJ-SIM-0002",
       "status": "inactive"
     },
     {
-      "curp_hash": "7d7d30689a8de2f864b1a5baf41aec228b87f56080846d750bda7a75bc12ad60",
+      "curp_hash": "983ed9325a507c245adbd28dee8e13d5cceec9cbe2d809c28c2e414d602f662c",
       "curp_masked": "LOMC************02",
+      "nombres": "Carlos",
+      "apellido": "Lopez",
+      "municipio_id": 3,
       "tarjeta_numero": "TJ-SIM-0003",
       "status": "active"
     },
     {
-      "curp_hash": "3c2198343c60dd48e77df6e33889404c2576bcd5790b74d598ab631a26e75462",
+      "curp_hash": "8f7e521a53148b989607a64dd261a74caa34493b918bb19a7bc1c8cff69c6281",
       "curp_masked": "HERL************01",
+      "nombres": "Ana",
+      "apellido": "Hernandez",
+      "municipio_id": 1,
       "tarjeta_numero": "TJ-SIM-0004",
       "status": "blocked"
     },
     {
-      "curp_hash": "238d9b9348291706631b7d456216050ebeaf33978dac3274edaa6466687e1bb0",
+      "curp_hash": "9ac5019359a6c14488b4ecedad0cf021d8226d699b8151892ee5aa9a27f9bff3",
       "curp_masked": "CATL************05",
+      "nombres": "Luis",
+      "apellido": "Camacho",
+      "municipio_id": 3,
       "tarjeta_numero": "TJ-SIM-0005",
       "status": "active"
     }

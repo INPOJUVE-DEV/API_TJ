@@ -164,18 +164,24 @@ function mockConnectionExecute(sql, params = []) {
       curp_hash: params[0],
       curp_masked: params[1],
       tarjeta_numero: params[2],
-      status: params[3]
+      status: params[3],
+      nombres_ciphertext: params[6] || null,
+      apellido_ciphertext: params[9] || null,
+      municipio_id: params[12] || null
     };
     state.cardholdersSync.set(row.curp_hash, row);
     return [{ insertId: row.id, affectedRows: 1 }, []];
   }
 
   if (sql.includes('UPDATE cardholders_sync')) {
-    const row = [...state.cardholdersSync.values()].find((item) => item.id === params[5]);
+    const row = [...state.cardholdersSync.values()].find((item) => item.id === params[12]);
     if (row) {
       row.curp_masked = params[0];
       row.tarjeta_numero = params[1];
       row.status = params[2];
+      row.nombres_ciphertext = params[5] || row.nombres_ciphertext || null;
+      row.apellido_ciphertext = params[8] || row.apellido_ciphertext || null;
+      row.municipio_id = params[11] || row.municipio_id || null;
     }
     return [{ affectedRows: row ? 1 : 0 }, []];
   }

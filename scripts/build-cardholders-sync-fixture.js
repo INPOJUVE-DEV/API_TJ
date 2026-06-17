@@ -26,6 +26,9 @@ async function main() {
       return {
         curp_hash: lookup.curpHash,
         curp_masked: lookup.curpMasked,
+        nombres: String(item.nombres || '').trim() || null,
+        apellido: String(item.apellido || '').trim() || null,
+        municipio_id: Number(item.municipio_id) > 0 ? Number(item.municipio_id) : null,
         tarjeta_numero: String(item.tarjeta_numero || '').trim(),
         status: String(item.status || 'active').trim().toLowerCase()
       };

@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { buildCurpLookup } = require('../services/curpHashService');
+const { encryptString } = require('../services/fieldEncryptionService');
 const {
   hashPassword,
   validatePassword
@@ -11,6 +12,7 @@ const {
   getUserSessionProfileById,
   issueUserSession
 } = require('../services/userSessionService');
+const { publishNotification } = require('../services/adminNotificationsService');
 
 const VALID_STATUSES = new Set(['active', 'inactive', 'blocked']);
 const HASH_REGEX = /^[a-f0-9]{64}$/i;
@@ -28,6 +30,41 @@ function getRequiredString(body, field) {
     throw error;
   }
   return value.trim();
+}
+
+function getOptionalTrimmedString(body, field, maxLength) {
+  const raw = body?.[field];
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+
+  const value = String(raw).trim();
+  if (!value) {
+    return null;
+  }
+  if (maxLength && value.length > maxLength) {
+    const error = new Error(`${field} no es valido.`);
+    error.statusCode = 422;
+    throw error;
+  }
+
+  return value;
+}
+
+function getOptionalPositiveInteger(body, field) {
+  const raw = body?.[field];
+  if (raw === undefined || raw === null || raw === '') {
+    return null;
+  }
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    const error = new Error(`${field} no es valido.`);
+    error.statusCode = 422;
+    throw error;
+  }
+
+  return value;
 }
 
 function normalizeEmail(value) {
@@ -103,6 +140,7 @@ exports.sync = async (req, res) => {
   let updated = 0;
   let skipped = 0;
   let conflict = 0;
+  const itemsPreview = [];
 
   let connection;
   try {
@@ -114,6 +152,11 @@ exports.sync = async (req, res) => {
       const curpMasked = String(item?.curp_masked || '').trim();
       const tarjetaNumero = String(item?.tarjeta_numero || '').trim();
       const status = String(item?.status || 'active').trim();
+      const nombres = getOptionalTrimmedString(item, 'nombres', 120);
+      const apellido = getOptionalTrimmedString(item, 'apellido', 150);
+      const municipioId = getOptionalPositiveInteger(item, 'municipio_id');
+      const encryptedNombres = encryptString(nombres);
+      const encryptedApellido = encryptString(apellido);
 
       if (
         !HASH_REGEX.test(curpHash) ||
@@ -142,19 +185,65 @@ exports.sync = async (req, res) => {
       if (existing.length === 0) {
         await connection.execute(
           `INSERT INTO cardholders_sync
-            (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [curpHash, curpMasked, tarjetaNumero, status, actor, new Date()]
+            (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at,
+             nombres_ciphertext, nombres_iv, nombres_tag,
+             apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            curpHash,
+            curpMasked,
+            tarjetaNumero,
+            status,
+            actor,
+            new Date(),
+            encryptedNombres?.payload_ciphertext || null,
+            encryptedNombres?.payload_iv || null,
+            encryptedNombres?.payload_tag || null,
+            encryptedApellido?.payload_ciphertext || null,
+            encryptedApellido?.payload_iv || null,
+            encryptedApellido?.payload_tag || null,
+            municipioId
+          ]
         );
         inserted += 1;
       } else {
         await connection.execute(
           `UPDATE cardholders_sync
-           SET curp_masked = ?, tarjeta_numero = ?, status = ?, sync_source = ?, synced_at = ?
+           SET curp_masked = ?, tarjeta_numero = ?, status = ?, sync_source = ?, synced_at = ?,
+               nombres_ciphertext = COALESCE(?, nombres_ciphertext),
+               nombres_iv = COALESCE(?, nombres_iv),
+               nombres_tag = COALESCE(?, nombres_tag),
+               apellido_ciphertext = COALESCE(?, apellido_ciphertext),
+               apellido_iv = COALESCE(?, apellido_iv),
+               apellido_tag = COALESCE(?, apellido_tag),
+               municipio_id = COALESCE(?, municipio_id)
            WHERE id = ?`,
-          [curpMasked, tarjetaNumero, status, actor, new Date(), existing[0].id]
+          [
+            curpMasked,
+            tarjetaNumero,
+            status,
+            actor,
+            new Date(),
+            encryptedNombres?.payload_ciphertext || null,
+            encryptedNombres?.payload_iv || null,
+            encryptedNombres?.payload_tag || null,
+            encryptedApellido?.payload_ciphertext || null,
+            encryptedApellido?.payload_iv || null,
+            encryptedApellido?.payload_tag || null,
+            municipioId,
+            existing[0].id
+          ]
         );
         updated += 1;
+      }
+
+      if (itemsPreview.length < 5) {
+        itemsPreview.push({
+          tarjeta_numero: tarjetaNumero,
+          curp_masked: curpMasked,
+          status,
+          municipio_id: municipioId
+        });
       }
     }
 
@@ -180,6 +269,27 @@ exports.sync = async (req, res) => {
     );
 
     await connection.commit();
+    try {
+      publishNotification({
+        type: 'cardholders_sync.received',
+        title: 'Padron recibido desde Sys_IPJ',
+        message: `Se recibio un lote con ${items.length} registro(s) de Sys_IPJ.`,
+        source: actor,
+        audience: ['admin', 'reader'],
+        payload: {
+          sync_id: req.body?.sync_id || null,
+          processed: items.length,
+          inserted,
+          updated,
+          skipped,
+          conflict,
+          itemsPreview
+        }
+      });
+    } catch (notificationError) {
+      safeLogger.error('Error al publicar notificacion admin de sync', notificationError);
+    }
+
     return res.json({
       processed: items.length,
       inserted,

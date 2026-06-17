@@ -31,6 +31,14 @@ describe('Servicios de seguridad', () => {
     expect(decryptJson(encrypted)).toEqual(payload);
   });
 
+  test('fieldEncryptionService cifra strings para cardholders_sync y permite descifrarlos', () => {
+    const { encryptString, decryptString } = require('../src/services/fieldEncryptionService');
+    const encrypted = encryptString('Melissa');
+
+    expect(encrypted.payload_ciphertext).not.toContain('Melissa');
+    expect(decryptString(encrypted)).toBe('Melissa');
+  });
+
   test('safeLogger sanitiza CURP en objetos y strings', () => {
     const { sanitize } = require('../src/utils/safeLogger');
     expect(sanitize('CURP MELR000202MSPSRD06')).not.toContain('MELR000202MSPSRD06');

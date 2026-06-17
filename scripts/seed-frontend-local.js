@@ -2,6 +2,7 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { ensureSchema, getDbConfig } = require('./seed');
+const { encryptString } = require('../src/services/fieldEncryptionService');
 const { hashPassword } = require('../src/services/passwordService');
 const { buildCurpLookup } = require('../src/services/curpHashService');
 const { buildDeviceTestFixtures } = require('./fixtures/deviceTestBeneficiaries');
@@ -50,6 +51,15 @@ const DEVICE_TEST_FIXTURES = buildDeviceTestFixtures({
   passwordOverride: process.env.SEED_DEVICE_TEST_PASSWORD || null
 });
 
+function extractPrimaryLastName(value) {
+  const tokens = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return tokens[0] || null;
+}
+
 async function ensureMunicipios(connection) {
   for (const nombre of MUNICIPIOS) {
     await connection.execute(
@@ -69,12 +79,6 @@ async function ensureMunicipios(connection) {
 
 async function upsertCardholder(connection, fixture, municipioId, accountUserId = null) {
   if (accountUserId) {
-    await connection.execute(
-      `UPDATE cardholders
-       SET account_user_id = NULL
-       WHERE account_user_id = ? AND curp <> ?`,
-      [accountUserId, fixture.curp]
-    );
     const lookup = buildCurpLookup(fixture.curp);
     await connection.execute(
       `UPDATE cardholders_sync
@@ -84,34 +88,15 @@ async function upsertCardholder(connection, fixture, municipioId, accountUserId 
     );
   }
 
-  await connection.execute(
-    `INSERT INTO cardholders
-      (curp, nombres, apellidos, municipio_id, tarjeta_numero, status, account_user_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-      nombres = VALUES(nombres),
-      apellidos = VALUES(apellidos),
-      municipio_id = VALUES(municipio_id),
-      tarjeta_numero = VALUES(tarjeta_numero),
-      status = VALUES(status),
-      account_user_id = VALUES(account_user_id)`,
-    [
-      fixture.curp,
-      fixture.nombres || fixture.nombre,
-      fixture.apellidos,
-      municipioId,
-      fixture.tarjetaNumero,
-      fixture.status,
-      accountUserId
-    ]
-  );
-
   const lookup = buildCurpLookup(fixture.curp);
+  const encryptedNombres = encryptString(fixture.nombres || fixture.nombre);
+  const encryptedApellido = encryptString(extractPrimaryLastName(fixture.apellidos));
   await connection.execute(
     `INSERT INTO cardholders_sync
       (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at, account_user_id,
-       activation_verified_until)
-     VALUES (?, ?, ?, ?, 'frontend-local-seed', ?, ?, NULL)
+       activation_verified_until, nombres_ciphertext, nombres_iv, nombres_tag,
+       apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
+     VALUES (?, ?, ?, ?, 'frontend-local-seed', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
       curp_masked = VALUES(curp_masked),
       tarjeta_numero = VALUES(tarjeta_numero),
@@ -119,14 +104,28 @@ async function upsertCardholder(connection, fixture, municipioId, accountUserId 
       sync_source = VALUES(sync_source),
       synced_at = VALUES(synced_at),
       account_user_id = VALUES(account_user_id),
-      activation_verified_until = VALUES(activation_verified_until)`,
+      activation_verified_until = VALUES(activation_verified_until),
+      nombres_ciphertext = VALUES(nombres_ciphertext),
+      nombres_iv = VALUES(nombres_iv),
+      nombres_tag = VALUES(nombres_tag),
+      apellido_ciphertext = VALUES(apellido_ciphertext),
+      apellido_iv = VALUES(apellido_iv),
+      apellido_tag = VALUES(apellido_tag),
+      municipio_id = VALUES(municipio_id)`,
     [
       lookup.curpHash,
       lookup.curpMasked,
       fixture.tarjetaNumero,
       fixture.status,
       new Date(),
-      accountUserId
+      accountUserId,
+      encryptedNombres?.payload_ciphertext || null,
+      encryptedNombres?.payload_iv || null,
+      encryptedNombres?.payload_tag || null,
+      encryptedApellido?.payload_ciphertext || null,
+      encryptedApellido?.payload_iv || null,
+      encryptedApellido?.payload_tag || null,
+      municipioId
     ]
   );
 
@@ -202,13 +201,6 @@ async function syncBeneficiaryUser(connection, fixture, userId, cardholderSyncId
      SET account_user_id = ?, activation_verified_until = NULL
      WHERE id = ?`,
     [userId, cardholderSyncId]
-  );
-
-  await connection.execute(
-    `UPDATE cardholders
-     SET account_user_id = ?
-     WHERE curp = ?`,
-    [userId, fixture.curp]
   );
 }
 

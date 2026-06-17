@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Notifications Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4efe4;
+        --panel: #fffaf0;
+        --line: #d7c8a8;
+        --ink: #18202a;
+        --muted: #58616d;
+        --accent: #0f766e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 28%),
+          linear-gradient(180deg, #f7f1e6 0%, var(--bg) 100%);
+        color: var(--ink);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      main {
+        width: min(980px, calc(100% - 32px));
+        margin: 32px auto;
+      }
+
+      .hero,
+      .panel {
+        background: rgba(255, 250, 240, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 20px 60px rgba(24, 32, 42, 0.08);
+      }
+
+      .hero {
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 3vw, 2.6rem);
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 112px;
+        resize: vertical;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        padding: 14px 16px;
+        font: inherit;
+        color: var(--ink);
+        background: #fffdf8;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .secondary {
+        background: #ece2cb;
+        color: var(--ink);
+      }
+
+      .status {
+        margin-top: 16px;
+        font-weight: 600;
+      }
+
+      .status.connected {
+        color: var(--accent);
+      }
+
+      .status.error {
+        color: #b91c1c;
+      }
+
+      .feed {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .notification {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: white;
+        padding: 16px;
+      }
+
+      .notification header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .notification strong {
+        font-size: 1rem;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: #e8f4f1;
+        color: var(--accent);
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+
+      .metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 12px 0;
+      }
+
+      .metric {
+        border-radius: 12px;
+        background: #f6efe1;
+        padding: 8px 10px;
+        font-size: 0.9rem;
+      }
+
+      .preview {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      .preview th,
+      .preview td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid #efe2c7;
+        font-size: 0.92rem;
+      }
+
+      .empty {
+        color: var(--muted);
+        padding: 16px 0 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <h1>Monitor de sincronizacion Sys_IPJ</h1>
+        <p>
+          Esta vista demo abre un stream SSE autenticado y muestra cada lote que entra desde
+          <code>Sys_IPJ</code>. Pega un <code>accessToken</code> admin o reader y presiona conectar.
+        </p>
+      </section>
+
+      <section class="panel">
+        <label for="token">Access token admin</label>
+        <textarea id="token" placeholder="Pega aqui el Bearer token del login admin"></textarea>
+        <div class="actions">
+          <button id="connect" class="primary">Conectar</button>
+          <button id="disconnect" class="secondary">Desconectar</button>
+          <button id="loadRecent" class="secondary">Recargar recientes</button>
+        </div>
+        <div id="status" class="status">Sin conexion</div>
+        <div id="feed" class="feed"></div>
+        <div id="empty" class="empty">Aun no hay notificaciones en esta sesion.</div>
+      </section>
+    </main>
+
+    <script>
+      const tokenInput = document.getElementById('token');
+      const connectButton = document.getElementById('connect');
+      const disconnectButton = document.getElementById('disconnect');
+      const loadRecentButton = document.getElementById('loadRecent');
+      const statusNode = document.getElementById('status');
+      const feedNode = document.getElementById('feed');
+      const emptyNode = document.getElementById('empty');
+
+      let eventSource = null;
+      const renderedIds = new Set();
+
+      function setStatus(text, kind) {
+        statusNode.textContent = text;
+        statusNode.className = `status ${kind || ''}`.trim();
+      }
+
+      function formatDate(value) {
+        try {
+          return new Date(value).toLocaleString('es-MX');
+        } catch {
+          return value || '-';
+        }
+      }
+
+      function renderNotification(notification, prepend = true) {
+        if (!notification || renderedIds.has(notification.id)) {
+          return;
+        }
+        renderedIds.add(notification.id);
+
+        const previewRows = Array.isArray(notification.payload?.itemsPreview)
+          ? notification.payload.itemsPreview
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${item.tarjeta_numero || '-'}</td>
+                    <td>${item.curp_masked || '-'}</td>
+                    <td>${item.status || '-'}</td>
+                  </tr>
+                `
+              )
+              .join('')
+          : '';
+
+        const metrics = notification.payload
+          ? [
+              ['Procesados', notification.payload.processed],
+              ['Insertados', notification.payload.inserted],
+              ['Actualizados', notification.payload.updated],
+              ['Omitidos', notification.payload.skipped],
+              ['Conflictos', notification.payload.conflict]
+            ]
+              .filter((entry) => entry[1] !== undefined)
+              .map((entry) => `<div class="metric"><strong>${entry[0]}:</strong> ${entry[1]}</div>`)
+              .join('')
+          : '';
+
+        const article = document.createElement('article');
+        article.className = 'notification';
+        article.innerHTML = `
+          <header>
+            <div>
+              <strong>${notification.title}</strong>
+              <div class="meta">${formatDate(notification.createdAt)} | ${notification.source}</div>
+            </div>
+            <span class="badge">${notification.type}</span>
+          </header>
+          <p>${notification.message || ''}</p>
+          <div class="metrics">${metrics}</div>
+          ${
+            previewRows
+              ? `
+                <table class="preview">
+                  <thead>
+                    <tr>
+                      <th>Tarjeta</th>
+                      <th>CURP</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>${previewRows}</tbody>
+                </table>
+              `
+              : ''
+          }
+        `;
+
+        if (prepend) {
+          feedNode.prepend(article);
+        } else {
+          feedNode.append(article);
+        }
+
+        emptyNode.style.display = 'none';
+      }
+
+      async function authorizedFetch(url) {
+        const token = tokenInput.value.trim();
+        if (!token) {
+          throw new Error('Pega primero un access token admin.');
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || `HTTP ${response.status}`);
+        }
+
+        return response.json();
+      }
+
+      async function loadRecent() {
+        const payload = await authorizedFetch('/api/v1/admin/notifications/recent?limit=20');
+        feedNode.innerHTML = '';
+        renderedIds.clear();
+        for (const item of (payload.items || []).slice().reverse()) {
+          renderNotification(item, false);
+        }
+        emptyNode.style.display = payload.items?.length ? 'none' : 'block';
+      }
+
+      async function connect() {
+        disconnect();
+        setStatus('Solicitando token de stream...', '');
+
+        const payload = await authorizedFetch('/api/v1/admin/notifications/stream-token');
+        await loadRecent();
+
+        eventSource = new EventSource(payload.streamUrl);
+        eventSource.addEventListener('open', () => {
+          setStatus('Conectado en tiempo real', 'connected');
+        });
+        eventSource.addEventListener('notification', (event) => {
+          try {
+            renderNotification(JSON.parse(event.data), true);
+          } catch (error) {
+            console.error('No se pudo renderizar notificacion', error);
+          }
+        });
+        eventSource.addEventListener('error', () => {
+          setStatus('Conexion interrumpida. Reintentando...', 'error');
+        });
+      }
+
+      function disconnect() {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        setStatus('Sin conexion', '');
+      }
+
+      connectButton.addEventListener('click', () => {
+        connect().catch((error) => {
+          setStatus(error.message || 'No se pudo conectar', 'error');
+        });
+      });
+
+      disconnectButton.addEventListener('click', () => {
+        disconnect();
+      });
+
+      loadRecentButton.addEventListener('click', () => {
+        loadRecent().catch((error) => {
+          setStatus(error.message || 'No se pudieron cargar recientes', 'error');
+        });
+      });
+    </script>
+  </body>
+</html>

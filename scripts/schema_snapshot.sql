@@ -18,9 +18,7 @@ DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS beneficiarios_sync_log;
 DROP TABLE IF EXISTS solicitudes_registro;
 DROP TABLE IF EXISTS cardholders_sync;
-DROP TABLE IF EXISTS cardholder_audit_logs;
 DROP TABLE IF EXISTS beneficios;
-DROP TABLE IF EXISTS cardholders;
 DROP TABLE IF EXISTS usuarios;
 DROP TABLE IF EXISTS categorias;
 DROP TABLE IF EXISTS municipios;
@@ -63,33 +61,18 @@ CREATE TABLE usuarios (
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE cardholders (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  curp VARCHAR(20) NOT NULL UNIQUE,
-  nombres VARCHAR(120) NOT NULL,
-  apellidos VARCHAR(150) NOT NULL,
-  municipio_id INT,
-  tarjeta_numero VARCHAR(50),
-  status ENUM('active','inactive','blocked') DEFAULT 'active',
-  lookup_attempts INT DEFAULT 0,
-  last_lookup_attempt_at DATETIME NULL,
-  lookup_blocked_until DATETIME NULL,
-  pending_account_until DATETIME NULL,
-  account_user_id INT UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (municipio_id) REFERENCES municipios(id)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL,
-  FOREIGN KEY (account_user_id) REFERENCES usuarios(id)
-    ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 CREATE TABLE cardholders_sync (
   id INT AUTO_INCREMENT PRIMARY KEY,
   curp_hash CHAR(64) NOT NULL UNIQUE,
   curp_masked VARCHAR(20) NOT NULL,
   tarjeta_numero VARCHAR(50) NOT NULL UNIQUE,
+  nombres_ciphertext TEXT NULL,
+  nombres_iv VARCHAR(64) NULL,
+  nombres_tag VARCHAR(64) NULL,
+  apellido_ciphertext TEXT NULL,
+  apellido_iv VARCHAR(64) NULL,
+  apellido_tag VARCHAR(64) NULL,
+  municipio_id INT NULL,
   status ENUM('active','inactive','blocked') NOT NULL DEFAULT 'active',
   sync_source VARCHAR(120),
   synced_at DATETIME NOT NULL,
@@ -98,6 +81,9 @@ CREATE TABLE cardholders_sync (
   activation_verified_until DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (municipio_id) REFERENCES municipios(id)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
   FOREIGN KEY (account_user_id) REFERENCES usuarios(id)
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -253,16 +239,6 @@ CREATE TABLE beneficios (
   FOREIGN KEY (municipio_id) REFERENCES municipios(id)
     ON UPDATE CASCADE
     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE cardholder_audit_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  cardholder_id INT NOT NULL,
-  action ENUM('lookup','account_created') NOT NULL,
-  ip_address VARCHAR(45),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (cardholder_id) REFERENCES cardholders(id)
-    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE solicitudes_registro (

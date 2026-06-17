@@ -27,9 +27,26 @@ function getKey() {
 }
 
 function encryptJson(payload) {
+  const plaintext = Buffer.from(JSON.stringify(payload), 'utf8');
+  return encryptBuffer(plaintext);
+}
+
+function encryptString(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = String(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return encryptBuffer(Buffer.from(normalized, 'utf8'));
+}
+
+function encryptBuffer(plaintext) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(getAlgorithm(), getKey(), iv);
-  const plaintext = Buffer.from(JSON.stringify(payload), 'utf8');
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
 
@@ -41,20 +58,33 @@ function encryptJson(payload) {
 }
 
 function decryptJson({ payload_ciphertext, payload_iv, payload_tag }) {
+  return JSON.parse(decryptBuffer({ payload_ciphertext, payload_iv, payload_tag }).toString('utf8'));
+}
+
+function decryptString(payload) {
+  if (!payload?.payload_ciphertext || !payload?.payload_iv || !payload?.payload_tag) {
+    return null;
+  }
+
+  return decryptBuffer(payload).toString('utf8');
+}
+
+function decryptBuffer({ payload_ciphertext, payload_iv, payload_tag }) {
   const decipher = crypto.createDecipheriv(
     getAlgorithm(),
     getKey(),
     Buffer.from(payload_iv, 'base64')
   );
   decipher.setAuthTag(Buffer.from(payload_tag, 'base64'));
-  const plaintext = Buffer.concat([
+  return Buffer.concat([
     decipher.update(Buffer.from(payload_ciphertext, 'base64')),
     decipher.final()
   ]);
-  return JSON.parse(plaintext.toString('utf8'));
 }
 
 module.exports = {
   encryptJson,
-  decryptJson
+  encryptString,
+  decryptJson,
+  decryptString
 };

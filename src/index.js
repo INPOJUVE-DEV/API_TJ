@@ -110,6 +110,7 @@ const adminLookupsRoutes = require('./routes/adminLookups');
 const adminUsersRoutes = require('./routes/adminUsers');
 const adminBeneficiariosStagingRoutes = require('./routes/adminBeneficiariosStaging');
 const adminSessionRoutes = require('./routes/adminSession');
+const adminNotificationsRoutes = require('./routes/adminNotifications');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1', userRoutes);
@@ -124,6 +125,7 @@ app.use('/api/v1/admin', adminDashboardRoutes);
 app.use('/api/v1/admin', adminLookupsRoutes);
 app.use('/api/v1/admin', adminUsersRoutes);
 app.use('/api/v1/admin', adminBeneficiariosStagingRoutes);
+app.use('/api/v1/admin', adminNotificationsRoutes);
 
 const PORT = process.env.PORT || 8080;
 if (require.main === module) {
