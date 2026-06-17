@@ -8,6 +8,26 @@ const safeLogger = require('../utils/safeLogger');
 
 const PUSHABLE_STATUSES = new Set(['pending', 'error']);
 const FINAL_STATUSES = new Set(['accepted', 'rejected']);
+const VALID_SEX_VALUES = new Set(['M', 'F', 'X']);
+const TEN_DIGIT_PHONE_REGEX = /^\d{10}$/;
+
+function isValidIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) {
+    return false;
+  }
+
+  const [year, month, day] = String(value).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
 
 function getActor(req) {
   return req.integration?.client?.client_code || (req.user?.id ? `user:${req.user.id}` : 'unknown');
@@ -88,8 +108,26 @@ function normalizeBeneficiarioPayload(body) {
 }
 
 function validateBeneficiarioPayload(payload) {
+  if (!TEN_DIGIT_PHONE_REGEX.test(payload.telefono)) {
+    const error = new Error('telefono debe tener 10 digitos.');
+    error.statusCode = 422;
+    throw error;
+  }
+
+  if (!VALID_SEX_VALUES.has(payload.sexo)) {
+    const error = new Error('sexo debe ser M, F o X.');
+    error.statusCode = 422;
+    throw error;
+  }
+
+  if (!isValidIsoDate(payload.fecha_nacimiento)) {
+    const error = new Error('fecha_nacimiento no es valida.');
+    error.statusCode = 422;
+    throw error;
+  }
+
   if (!Number.isInteger(payload.domicilio.municipio_id) || payload.domicilio.municipio_id <= 0) {
-    const error = new Error('domicilio.municipio_id es obligatorio.');
+    const error = new Error('domicilio.municipio_id debe ser un entero positivo.');
     error.statusCode = 422;
     throw error;
   }

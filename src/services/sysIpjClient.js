@@ -8,7 +8,7 @@ const OUTBOUND_ISSUER = String(process.env.API_TJ_TO_SYS_IPJ_ISSUER || 'api_tj')
 const OUTBOUND_SUBJECT = String(process.env.API_TJ_TO_SYS_IPJ_SUBJECT || OUTBOUND_ISSUER).trim();
 const OUTBOUND_AUDIENCE = String(process.env.API_TJ_TO_SYS_IPJ_AUDIENCE || 'sys_ipj').trim();
 const OUTBOUND_SCOPE = String(
-  process.env.API_TJ_TO_SYS_IPJ_SCOPE || 'beneficiarios.create'
+  process.env.API_TJ_TO_SYS_IPJ_SCOPE || 'beneficiarios.staging.push'
 ).trim();
 const OUTBOUND_KID = String(
   process.env.API_TJ_TO_SYS_IPJ_JWT_KID || 'api_tj-current'
@@ -84,8 +84,11 @@ async function pushBeneficiario({ externalRequestId, payload }) {
       },
       body: JSON.stringify({
         external_request_id: externalRequestId,
-        beneficiario: payload,
-        records: [payload]
+        source: 'api_tj',
+        submitted_by: {
+          system: 'api_tj'
+        },
+        beneficiario: payload
       }),
       signal: controller.signal
     });

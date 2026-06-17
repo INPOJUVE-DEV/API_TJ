@@ -34,7 +34,7 @@ describe('sysIpjClient', () => {
     process.env.API_TJ_TO_SYS_IPJ_ISSUER = 'api_tj';
     process.env.API_TJ_TO_SYS_IPJ_SUBJECT = 'api_tj';
     process.env.API_TJ_TO_SYS_IPJ_AUDIENCE = 'sys_ipj';
-    process.env.API_TJ_TO_SYS_IPJ_SCOPE = 'beneficiarios.create';
+    process.env.API_TJ_TO_SYS_IPJ_SCOPE = 'beneficiarios.staging.push';
     process.env.API_TJ_TO_SYS_IPJ_JWT_EXPIRES_IN = '5m';
 
     global.fetch.mockResolvedValue({
@@ -86,20 +86,27 @@ describe('sysIpjClient', () => {
     expect(options.headers.Authorization).toMatch(/^Bearer\s+/);
 
     const token = options.headers.Authorization.replace(/^Bearer\s+/i, '');
+    const decodedComplete = jwt.decode(token, { complete: true });
     const decoded = jwt.verify(token, publicKey, {
       algorithms: ['RS256'],
       audience: 'sys_ipj',
       issuer: 'api_tj'
     });
+    expect(decodedComplete.header.kid).toBe('api_tj-current');
     expect(decoded.sub).toBe('api_tj');
-    expect(decoded.scope).toBe('beneficiarios.create');
+    expect(decoded.aud).toBe('sys_ipj');
+    expect(decoded.iss).toBe('api_tj');
+    expect(decoded.scope).toBe('beneficiarios.staging.push');
     expect(decoded.jti).toBeTruthy();
 
     const requestBody = JSON.parse(options.body);
     expect(requestBody).toEqual({
       external_request_id: 'INF-1',
-      beneficiario: payload,
-      records: [payload]
+      source: 'api_tj',
+      submitted_by: {
+        system: 'api_tj'
+      },
+      beneficiario: payload
     });
   });
 

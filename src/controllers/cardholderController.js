@@ -95,6 +95,27 @@ function handleValidationError(res, error) {
   return res.status(status).json({ message: error.message || 'Solicitud invalida.' });
 }
 
+function buildSyncResult(index, status, extra = {}) {
+  return {
+    index,
+    status,
+    ...extra
+  };
+}
+
+function resolveSyncStatus({ processed, accepted, skipped, conflict, rejected }) {
+  if (processed === 0) {
+    return 'success';
+  }
+  if (accepted === processed) {
+    return 'success';
+  }
+  if (accepted === 0 && (skipped > 0 || conflict > 0 || rejected > 0)) {
+    return 'failed';
+  }
+  return 'partial';
+}
+
 exports.lookup = async (req, res) => {
   try {
     const curp = getRequiredString(req.body, 'curp');
@@ -140,114 +161,158 @@ exports.sync = async (req, res) => {
   let updated = 0;
   let skipped = 0;
   let conflict = 0;
+  let rejected = 0;
   const itemsPreview = [];
+  const results = [];
 
   let connection;
   try {
     connection = await db.getConnection();
     await connection.beginTransaction();
 
-    for (const item of items) {
-      const curpHash = String(item?.curp_hash || '').trim().toLowerCase();
-      const curpMasked = String(item?.curp_masked || '').trim();
-      const tarjetaNumero = String(item?.tarjeta_numero || '').trim();
-      const status = String(item?.status || 'active').trim();
-      const nombres = getOptionalTrimmedString(item, 'nombres', 120);
-      const apellido = getOptionalTrimmedString(item, 'apellido', 150);
-      const municipioId = getOptionalPositiveInteger(item, 'municipio_id');
-      const encryptedNombres = encryptString(nombres);
-      const encryptedApellido = encryptString(apellido);
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
 
-      if (
-        !HASH_REGEX.test(curpHash) ||
-        !curpMasked ||
-        !tarjetaNumero ||
-        !VALID_STATUSES.has(status)
-      ) {
-        skipped += 1;
-        continue;
-      }
+      try {
+        const curpHash = String(item?.curp_hash || '').trim().toLowerCase();
+        const curpMasked = String(item?.curp_masked || '').trim();
+        const tarjetaNumero = String(item?.tarjeta_numero || '').trim();
+        const status = String(item?.status || 'active').trim();
+        const nombres = getOptionalTrimmedString(item, 'nombres', 120);
+        const apellido = getOptionalTrimmedString(item, 'apellido', 150);
+        const municipioId = getOptionalPositiveInteger(item, 'municipio_id');
+        const encryptedNombres = encryptString(nombres);
+        const encryptedApellido = encryptString(apellido);
 
-      const [existingCard] = await connection.execute(
-        'SELECT id, curp_hash FROM cardholders_sync WHERE tarjeta_numero = ? AND curp_hash <> ? LIMIT 1',
-        [tarjetaNumero, curpHash]
-      );
-      if (existingCard.length > 0) {
-        conflict += 1;
-        continue;
-      }
+        if (
+          !HASH_REGEX.test(curpHash) ||
+          !curpMasked ||
+          !tarjetaNumero ||
+          !VALID_STATUSES.has(status)
+        ) {
+          skipped += 1;
+          results.push(
+            buildSyncResult(index, 'skipped', {
+              reason: 'invalid_item'
+            })
+          );
+          continue;
+        }
 
-      const [existing] = await connection.execute(
-        'SELECT id, tarjeta_numero, status FROM cardholders_sync WHERE curp_hash = ? LIMIT 1',
-        [curpHash]
-      );
-
-      if (existing.length === 0) {
-        await connection.execute(
-          `INSERT INTO cardholders_sync
-            (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at,
-             nombres_ciphertext, nombres_iv, nombres_tag,
-             apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            curpHash,
-            curpMasked,
-            tarjetaNumero,
-            status,
-            actor,
-            new Date(),
-            encryptedNombres?.payload_ciphertext || null,
-            encryptedNombres?.payload_iv || null,
-            encryptedNombres?.payload_tag || null,
-            encryptedApellido?.payload_ciphertext || null,
-            encryptedApellido?.payload_iv || null,
-            encryptedApellido?.payload_tag || null,
-            municipioId
-          ]
+        const [existingCard] = await connection.execute(
+          'SELECT id, curp_hash FROM cardholders_sync WHERE tarjeta_numero = ? AND curp_hash <> ? LIMIT 1',
+          [tarjetaNumero, curpHash]
         );
-        inserted += 1;
-      } else {
-        await connection.execute(
-          `UPDATE cardholders_sync
-           SET curp_masked = ?, tarjeta_numero = ?, status = ?, sync_source = ?, synced_at = ?,
-               nombres_ciphertext = COALESCE(?, nombres_ciphertext),
-               nombres_iv = COALESCE(?, nombres_iv),
-               nombres_tag = COALESCE(?, nombres_tag),
-               apellido_ciphertext = COALESCE(?, apellido_ciphertext),
-               apellido_iv = COALESCE(?, apellido_iv),
-               apellido_tag = COALESCE(?, apellido_tag),
-               municipio_id = COALESCE(?, municipio_id)
-           WHERE id = ?`,
-          [
-            curpMasked,
-            tarjetaNumero,
-            status,
-            actor,
-            new Date(),
-            encryptedNombres?.payload_ciphertext || null,
-            encryptedNombres?.payload_iv || null,
-            encryptedNombres?.payload_tag || null,
-            encryptedApellido?.payload_ciphertext || null,
-            encryptedApellido?.payload_iv || null,
-            encryptedApellido?.payload_tag || null,
-            municipioId,
-            existing[0].id
-          ]
-        );
-        updated += 1;
-      }
+        if (existingCard.length > 0) {
+          conflict += 1;
+          results.push(
+            buildSyncResult(index, 'conflict', {
+              reason: 'tarjeta_numero_already_assigned'
+            })
+          );
+          continue;
+        }
 
-      if (itemsPreview.length < 5) {
-        itemsPreview.push({
-          tarjeta_numero: tarjetaNumero,
-          curp_masked: curpMasked,
-          status,
-          municipio_id: municipioId
-        });
+        const [existing] = await connection.execute(
+          'SELECT id, tarjeta_numero, status FROM cardholders_sync WHERE curp_hash = ? LIMIT 1',
+          [curpHash]
+        );
+
+        if (existing.length === 0) {
+          await connection.execute(
+            `INSERT INTO cardholders_sync
+              (curp_hash, curp_masked, tarjeta_numero, status, sync_source, synced_at,
+               nombres_ciphertext, nombres_iv, nombres_tag,
+               apellido_ciphertext, apellido_iv, apellido_tag, municipio_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              curpHash,
+              curpMasked,
+              tarjetaNumero,
+              status,
+              actor,
+              new Date(),
+              encryptedNombres?.payload_ciphertext || null,
+              encryptedNombres?.payload_iv || null,
+              encryptedNombres?.payload_tag || null,
+              encryptedApellido?.payload_ciphertext || null,
+              encryptedApellido?.payload_iv || null,
+              encryptedApellido?.payload_tag || null,
+              municipioId
+            ]
+          );
+          inserted += 1;
+          results.push(
+            buildSyncResult(index, 'accepted', {
+              action: 'inserted'
+            })
+          );
+        } else {
+          await connection.execute(
+            `UPDATE cardholders_sync
+             SET curp_masked = ?, tarjeta_numero = ?, status = ?, sync_source = ?, synced_at = ?,
+                 nombres_ciphertext = COALESCE(?, nombres_ciphertext),
+                 nombres_iv = COALESCE(?, nombres_iv),
+                 nombres_tag = COALESCE(?, nombres_tag),
+                 apellido_ciphertext = COALESCE(?, apellido_ciphertext),
+                 apellido_iv = COALESCE(?, apellido_iv),
+                 apellido_tag = COALESCE(?, apellido_tag),
+                 municipio_id = COALESCE(?, municipio_id)
+             WHERE id = ?`,
+            [
+              curpMasked,
+              tarjetaNumero,
+              status,
+              actor,
+              new Date(),
+              encryptedNombres?.payload_ciphertext || null,
+              encryptedNombres?.payload_iv || null,
+              encryptedNombres?.payload_tag || null,
+              encryptedApellido?.payload_ciphertext || null,
+              encryptedApellido?.payload_iv || null,
+              encryptedApellido?.payload_tag || null,
+              municipioId,
+              existing[0].id
+            ]
+          );
+          updated += 1;
+          results.push(
+            buildSyncResult(index, 'accepted', {
+              action: 'updated'
+            })
+          );
+        }
+
+        if (itemsPreview.length < 5) {
+          itemsPreview.push({
+            tarjeta_numero: tarjetaNumero,
+            curp_masked: curpMasked,
+            status,
+            municipio_id: municipioId
+          });
+        }
+      } catch (error) {
+        if (error.statusCode) {
+          rejected += 1;
+          results.push(
+            buildSyncResult(index, 'rejected', {
+              reason: error.message
+            })
+          );
+          continue;
+        }
+        throw error;
       }
     }
 
-    const finalStatus = conflict > 0 || skipped > 0 ? 'partial' : 'success';
+    const accepted = inserted + updated;
+    const finalStatus = resolveSyncStatus({
+      processed: items.length,
+      accepted,
+      skipped,
+      conflict,
+      rejected
+    });
     await recordSyncAudit(
       {
         direction: 'SYS_IPJ_TO_API_TJ',
@@ -291,6 +356,9 @@ exports.sync = async (req, res) => {
     }
 
     return res.json({
+      accepted,
+      status: finalStatus,
+      results,
       processed: items.length,
       inserted,
       updated,
