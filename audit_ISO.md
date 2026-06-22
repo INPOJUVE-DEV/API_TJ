@@ -58,3 +58,4 @@ A continuación, la ruta de planeación estratégica para mitigar todas las brec
 
 > [!TIP]
 > Una vez completado este roadmap, se recomienda volver a ejecutar la auditoría *ISO27001 Gap Analyzer* para evidenciar y avalar el cierre sistemático de vulnerabilidades hacia un informe SoA (Statement of Applicability) confiable.
+commit nuevo
