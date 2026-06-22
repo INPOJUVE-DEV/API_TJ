@@ -1,0 +1,3 @@
+Mocks externos escuchando en http://127.0.0.1:9091
+AUTH0_DOMAIN=http://127.0.0.1:9091/auth0
+SYS_IPJ_PUSH_URL=http://127.0.0.1:9091/sys-ipj/beneficiarios

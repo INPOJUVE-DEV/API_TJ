@@ -1,0 +1,97 @@
+{
+  "lookup_cases": [
+    {
+      "label": "lookup_curp_registrada_en_padron_local",
+      "curp": "MELR000202MSPSRD06",
+      "expect_status": 200
+    },
+    {
+      "label": "lookup_curp_no_encontrada_sintetica",
+      "curp_template_prefix": "MELR000202MBCSRD",
+      "expect_status": 404
+    }
+  ],
+  "arrival_cases": [
+    {
+      "label": "staging_valido_julieta",
+      "expect_lookup_status": 404,
+      "expect_staging_status": 202,
+      "external_request_id_prefix": "UI-SEED-ARRIVAL-OK",
+      "beneficiario": {
+        "curp_template_prefix": "MOCJ050521MSPNRL",
+        "nombre": "JULIETA",
+        "apellido_paterno": "MORALES",
+        "apellido_materno": "CANO",
+        "fecha_nacimiento": "2005-05-21",
+        "folio_tarjeta": "TJ-UI-SEED-0001",
+        "sexo": "M",
+        "discapacidad": false,
+        "id_ine": "INE-UI-SEED-0001",
+        "telefono": "4441234567",
+        "domicilio": {
+          "calle": "AV REVOLUCION",
+          "numero_ext": "321B",
+          "numero_int": "2",
+          "colonia": "ZONA CENTRO",
+          "municipio_id": 1,
+          "codigo_postal": "22000",
+          "seccional": "0001"
+        }
+      }
+    },
+    {
+      "label": "staging_valido_alma",
+      "expect_lookup_status": 404,
+      "expect_staging_status": 202,
+      "external_request_id_prefix": "UI-SEED-ARRIVAL-OK",
+      "beneficiario": {
+        "curp_template_prefix": "AERL010101MSPRVN",
+        "nombre": "ALMA ELENA",
+        "apellido_paterno": "RIOS",
+        "apellido_materno": "LUNA",
+        "fecha_nacimiento": "2001-01-01",
+        "folio_tarjeta": "TJ-UI-SEED-0002",
+        "sexo": "F",
+        "discapacidad": false,
+        "id_ine": "INE-UI-SEED-0002",
+        "telefono": "4441112233",
+        "domicilio": {
+          "calle": "AVENIDA UNIVERSIDAD",
+          "numero_ext": "100",
+          "numero_int": null,
+          "colonia": "CENTRO",
+          "municipio_id": 1,
+          "codigo_postal": "78000",
+          "seccional": "0002"
+        }
+      }
+    },
+    {
+      "label": "staging_invalido_telefono",
+      "expect_lookup_status": 404,
+      "expect_staging_status": 422,
+      "external_request_id_prefix": "UI-SEED-ARRIVAL-INVALID",
+      "beneficiario": {
+        "curp_template_prefix": "BECM020202MSPLSN",
+        "nombre": "BERENICE",
+        "apellido_paterno": "CASTILLO",
+        "apellido_materno": "MENDOZA",
+        "fecha_nacimiento": "2002-02-02",
+        "folio_tarjeta": "TJ-UI-SEED-0003",
+        "sexo": "F",
+        "discapacidad": false,
+        "id_ine": "INE-UI-SEED-0003",
+        "telefono": "444222334",
+        "domicilio": {
+          "calle": "CALLE HIDALGO",
+          "numero_ext": "25",
+          "numero_int": "A",
+          "colonia": "BARRIO DE SANTIAGO",
+          "municipio_id": 1,
+          "codigo_postal": "78049",
+          "seccional": "0003"
+        }
+      }
+    }
+  ]
+}

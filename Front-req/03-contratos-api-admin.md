@@ -138,6 +138,10 @@ Response:
     "readers": 1,
     "blocked": 0
   },
+  "cardholders": {
+    "total": 120,
+    "withAccount": 48
+  },
   "integration": {
     "failedCallsLast24h": 4
   },

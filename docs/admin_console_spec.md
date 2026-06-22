@@ -226,6 +226,10 @@ Respuesta:
     "readers": 4,
     "blocked": 1
   },
+  "cardholders": {
+    "total": 120,
+    "withAccount": 48
+  },
   "integration": {
     "failedCallsLast24h": 3
   }

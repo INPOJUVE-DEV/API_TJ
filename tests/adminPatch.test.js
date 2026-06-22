@@ -172,6 +172,10 @@ jest.mock('../src/config/db', () => {
       ], []];
     }
 
+    if (sql.includes('FROM cardholders_sync') && sql.includes('SUM(CASE WHEN account_user_id IS NOT NULL THEN 1 ELSE 0 END)')) {
+      return [[{ total: 12, withAccount: 5 }], []];
+    }
+
     if (sql.includes('FROM integration_audit_log')) {
       return [[{ total: 4 }], []];
     }
@@ -321,6 +325,7 @@ describe('admin patch backend', () => {
     expect(dashboardResponse.statusCode).toBe(200);
     expect(dashboardResponse.body).toMatchObject({
       catalog: { benefits: 7 },
+      cardholders: { total: 12, withAccount: 5 },
       integration: { failedCallsLast24h: 4 }
     });
     expect(dashboardResponse.headers['access-control-allow-origin']).toBe('https://admin.example.com');

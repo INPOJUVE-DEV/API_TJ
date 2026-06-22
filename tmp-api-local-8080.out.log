@@ -1,3 +1,7 @@
+
+> tarjeta-joven-backend@0.1.0 start
+> node src/index.js
+
 Cliente de integracion listo: sys_ipj (sys_ipj-current)
 Cliente de integracion listo: unidad_informatica (unidad_informatica-current)
 API escuchando en puerto 8080

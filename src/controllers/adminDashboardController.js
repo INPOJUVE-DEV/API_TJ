@@ -20,6 +20,11 @@ exports.getDashboard = async (req, res) => {
        FROM usuarios
        GROUP BY role, status`
     );
+    const [[cardholderSummaryRow]] = await db.execute(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN account_user_id IS NOT NULL THEN 1 ELSE 0 END) AS withAccount
+       FROM cardholders_sync`
+    );
     const [[failedIntegrationRow]] = await db.execute(
       `SELECT COUNT(*) AS total
        FROM integration_audit_log
@@ -74,6 +79,10 @@ exports.getDashboard = async (req, res) => {
         benefits: Number(benefitsCount?.total || 0)
       },
       users,
+      cardholders: {
+        total: Number(cardholderSummaryRow?.total || 0),
+        withAccount: Number(cardholderSummaryRow?.withAccount || 0)
+      },
       integration: {
         failedCallsLast24h: Number(failedIntegrationRow?.total || 0)
       },
