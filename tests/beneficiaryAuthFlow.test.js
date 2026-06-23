@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const request = require('supertest');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
@@ -9,6 +10,11 @@ process.env.PASSWORD_RESET_URL_BASE = 'https://beneficiario.example.com/reset-pa
 
 const { buildCurpLookup } = require('../src/services/curpHashService');
 const { encryptString } = require('../src/services/fieldEncryptionService');
+const {
+  JWT_SECRET,
+  USER_TOKEN_AUDIENCE,
+  USER_TOKEN_ISSUER
+} = require('../src/config/tokenConfig');
 
 const BENEFICIARY_CURP = 'LOMC990505HSPLPM02';
 const ACTIVATION_CURP = 'MELR000202MSPSRD06';
@@ -125,6 +131,16 @@ const baseState = () => {
     ],
     refreshTokens: [],
     passwordResetTokens: [],
+    userQrTokens: [
+      {
+        id: 1,
+        user_id: 1,
+        token_value: 'TOKENBENEF',
+        valid_from: '2026-06-01',
+        valid_until: '2026-06-30',
+        status: 'active'
+      }
+    ],
     nextUserId: 3,
     nextRefreshTokenId: 1,
     nextPasswordResetId: 1
@@ -168,6 +184,31 @@ function buildSessionRow(user) {
   };
 }
 
+function buildProfileRow(user) {
+  const cardholder = state.cardholdersSync.find((item) => item.id === user.cardholder_sync_id) || null;
+  return {
+    id: user.id,
+    nombre: user.nombre,
+    apellidos: user.apellidos,
+    email: user.email,
+    telefono: user.telefono,
+    creditos: user.creditos,
+    role: user.role,
+    status: user.status,
+    fotoUrl: user.foto_url,
+    portadaUrl: user.portada_url,
+    cardholderSyncId: user.cardholder_sync_id,
+    municipio: user.municipio,
+    tarjetaNumero: cardholder?.tarjeta_numero || null,
+    nombres_ciphertext: cardholder?.nombres_ciphertext || null,
+    nombres_iv: cardholder?.nombres_iv || null,
+    nombres_tag: cardholder?.nombres_tag || null,
+    apellido_ciphertext: cardholder?.apellido_ciphertext || null,
+    apellido_iv: cardholder?.apellido_iv || null,
+    apellido_tag: cardholder?.apellido_tag || null
+  };
+}
+
 function mockExecuteSql(sql, params = []) {
   if (sql.includes('SELECT role, status, session_version FROM usuarios WHERE id = ?')) {
     const user = findUserById(params[0]);
@@ -180,6 +221,14 @@ function mockExecuteSql(sql, params = []) {
 
   if (sql.includes('FROM beneficios b') && sql.includes('LIMIT')) {
     return [catalogItems, []];
+  }
+
+  if (
+    sql.includes('SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.creditos, u.role, u.status') &&
+    sql.includes('WHERE u.id = ?')
+  ) {
+    const user = findUserById(params[0]);
+    return [user ? [buildProfileRow(user)] : [], []];
   }
 
   if (
@@ -196,6 +245,16 @@ function mockExecuteSql(sql, params = []) {
   ) {
     const user = findUserById(params[0]);
     return [user ? [buildSessionRow(user)] : [], []];
+  }
+
+  if (
+    sql.includes('SELECT id, token_value, valid_from') &&
+    sql.includes('FROM user_qr_tokens') &&
+    sql.includes('WHERE user_id = ?')
+  ) {
+    const token =
+      state.userQrTokens.find((item) => item.user_id === Number(params[0]) && item.status === 'active') || null;
+    return [token ? [token] : [], []];
   }
 
   if (sql.includes('UPDATE usuarios SET last_login_at = ?')) {
@@ -587,6 +646,56 @@ describe('beneficiary local auth flow', () => {
       email: 'beneficiary@example.com',
       nombreCompleto: 'Carlos Lopez Mendez'
     });
+  });
+
+  test('GET /me usa cardholders_sync cifrado como fallback cuando usuarios.nombre y apellidos son null', async () => {
+    const beneficiary = findUserById(1);
+    beneficiary.nombre = null;
+    beneficiary.apellidos = null;
+    const accessToken = jwt.sign(
+      {
+        id: beneficiary.id,
+        sub: String(beneficiary.id),
+        role: beneficiary.role,
+        status: beneficiary.status,
+        token_type: 'user',
+        session_version: beneficiary.session_version
+      },
+      JWT_SECRET,
+      {
+        issuer: USER_TOKEN_ISSUER,
+        audience: USER_TOKEN_AUDIENCE
+      }
+    );
+
+    const profile = await request(app)
+      .get('/api/v1/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(profile.statusCode).toBe(200);
+    expect(profile.body).toMatchObject({
+      id: 1,
+      nombre: 'Carlos',
+      apellidos: 'Lopez Mendez',
+      nombreCompleto: 'Carlos Lopez Mendez',
+      titular: {
+        nombre: 'Carlos',
+        primerApellido: 'Lopez'
+      },
+      titularNombre: 'Carlos',
+      titularPrimerApellido: 'Lopez',
+      nombreTitular: 'Carlos',
+      primerApellidoTitular: 'Lopez',
+      email: 'beneficiary@example.com',
+      cardholderSyncId: 1,
+      tarjetaNumero: BENEFICIARY_CARD
+    });
+    expect(profile.body).not.toHaveProperty('nombres_ciphertext');
+    expect(profile.body).not.toHaveProperty('nombres_iv');
+    expect(profile.body).not.toHaveProperty('nombres_tag');
+    expect(profile.body).not.toHaveProperty('apellido_ciphertext');
+    expect(profile.body).not.toHaveProperty('apellido_iv');
+    expect(profile.body).not.toHaveProperty('apellido_tag');
   });
 
   test('refresh rota cookie y el reuse invalida sesiones previas', async () => {

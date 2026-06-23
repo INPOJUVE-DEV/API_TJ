@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { decryptString } = require('../services/fieldEncryptionService');
 const {
   formatBarcodeValue,
   getOrCreateActiveToken
@@ -34,6 +35,15 @@ function getYearMonthFromDateValue(dateValue) {
   return null;
 }
 
+function safeDecryptString(payload) {
+  try {
+    return decryptString(payload);
+  } catch (error) {
+    safeLogger.error('No se pudo descifrar campo de perfil', error);
+    return null;
+  }
+}
+
 exports.getProfile = async (req, res) => {
   if (!req.user?.id) {
     return res.status(401).json({ message: 'Token requerido' });
@@ -44,7 +54,9 @@ exports.getProfile = async (req, res) => {
       `SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.creditos, u.role, u.status,
               u.foto_url AS fotoUrl, u.portada_url AS portadaUrl,
               u.cardholder_sync_id AS cardholderSyncId,
-              m.nombre AS municipio, cs.tarjeta_numero AS tarjetaNumero
+              m.nombre AS municipio, cs.tarjeta_numero AS tarjetaNumero,
+              cs.nombres_ciphertext, cs.nombres_iv, cs.nombres_tag,
+              cs.apellido_ciphertext, cs.apellido_iv, cs.apellido_tag
        FROM usuarios u
        LEFT JOIN municipios m ON u.municipio_id = m.id
        LEFT JOIN cardholders_sync cs ON cs.id = u.cardholder_sync_id
@@ -57,6 +69,20 @@ exports.getProfile = async (req, res) => {
     }
 
     const user = rows[0];
+    const syncedNombre = safeDecryptString({
+      payload_ciphertext: user.nombres_ciphertext,
+      payload_iv: user.nombres_iv,
+      payload_tag: user.nombres_tag
+    });
+    const syncedApellidos = safeDecryptString({
+      payload_ciphertext: user.apellido_ciphertext,
+      payload_iv: user.apellido_iv,
+      payload_tag: user.apellido_tag
+    });
+    const nombre = user.nombre || syncedNombre || null;
+    const apellidos = user.apellidos || syncedApellidos || null;
+    const nombreCompleto = [nombre, apellidos].filter(Boolean).join(' ').trim() || null;
+    const primerApellido = apellidos ? String(apellidos).trim().split(/\s+/)[0] : null;
     const tokenRow = await getOrCreateActiveToken(user.id);
     const yearMonth = tokenRow ? getYearMonthFromDateValue(tokenRow.valid_from) : null;
     const barcodeValue =
@@ -64,8 +90,17 @@ exports.getProfile = async (req, res) => {
 
     const response = {
       id: user.id,
-      nombre: user.nombre,
-      apellidos: user.apellidos,
+      nombre,
+      apellidos,
+      nombreCompleto,
+      titular: {
+        nombre,
+        primerApellido
+      },
+      titularNombre: nombre,
+      titularPrimerApellido: primerApellido,
+      nombreTitular: nombre,
+      primerApellidoTitular: primerApellido,
       role: user.role,
       status: user.status,
       edad: null,
