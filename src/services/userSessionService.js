@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { decryptString } = require('./fieldEncryptionService');
 const {
   JWT_SECRET,
   USER_TOKEN_AUDIENCE,
@@ -111,11 +112,25 @@ function getAccessTokenExpiresInSeconds(accessToken) {
   return Math.max(0, Number(decoded.exp) - Number(decoded.iat));
 }
 
+function decryptCardholderString(row, prefix) {
+  try {
+    return decryptString({
+      payload_ciphertext: row?.[`${prefix}_ciphertext`],
+      payload_iv: row?.[`${prefix}_iv`],
+      payload_tag: row?.[`${prefix}_tag`]
+    });
+  } catch {
+    return null;
+  }
+}
+
 function buildSessionUser(user) {
+  const nombre = user.nombre || decryptCardholderString(user, 'nombres');
+  const apellidos = user.apellidos || decryptCardholderString(user, 'apellido');
   return {
     id: user.id,
     email: user.email,
-    nombreCompleto: [user.nombre, user.apellidos].filter(Boolean).join(' ').trim() || null,
+    nombreCompleto: [nombre, apellidos].filter(Boolean).join(' ').trim() || null,
     role: user.role,
     status: user.status,
     cardholderSyncId: user.cardholder_sync_id || null,
@@ -135,7 +150,10 @@ function buildSessionPayload(user) {
 async function getUserSessionProfileById(userId, executor = db) {
   const [rows] = await executor.execute(
     `SELECT u.id, u.nombre, u.apellidos, u.email, u.password_hash, u.role, u.status,
-            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero
+            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero,
+            cs.nombres_ciphertext, cs.nombres_iv, cs.nombres_tag,
+            cs.apellido_ciphertext, cs.apellido_iv, cs.apellido_tag,
+            cs.municipio_id
      FROM usuarios u
      LEFT JOIN cardholders_sync cs ON cs.id = u.cardholder_sync_id
      WHERE u.id = ?
@@ -148,7 +166,10 @@ async function getUserSessionProfileById(userId, executor = db) {
 async function getUserSessionProfileByEmail(email, executor = db) {
   const [rows] = await executor.execute(
     `SELECT u.id, u.nombre, u.apellidos, u.email, u.password_hash, u.role, u.status,
-            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero
+            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero,
+            cs.nombres_ciphertext, cs.nombres_iv, cs.nombres_tag,
+            cs.apellido_ciphertext, cs.apellido_iv, cs.apellido_tag,
+            cs.municipio_id
      FROM usuarios u
      LEFT JOIN cardholders_sync cs ON cs.id = u.cardholder_sync_id
      WHERE u.email = ?
@@ -220,7 +241,10 @@ async function getRefreshTokenSession(rawToken, executor = db) {
   const [rows] = await executor.execute(
     `SELECT rt.id, rt.usuario_id, rt.refresh_token, rt.expiry_date, rt.revoked_at, rt.rotated_from,
             u.id AS user_id, u.nombre, u.apellidos, u.email, u.password_hash, u.role, u.status,
-            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero
+            u.session_version, u.cardholder_sync_id, cs.tarjeta_numero,
+            cs.nombres_ciphertext, cs.nombres_iv, cs.nombres_tag,
+            cs.apellido_ciphertext, cs.apellido_iv, cs.apellido_tag,
+            cs.municipio_id
      FROM refresh_tokens rt
      JOIN usuarios u ON u.id = rt.usuario_id
      LEFT JOIN cardholders_sync cs ON cs.id = u.cardholder_sync_id

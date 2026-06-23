@@ -8,11 +8,21 @@ process.env.PASSWORD_RESET_DEBUG = 'true';
 process.env.PASSWORD_RESET_URL_BASE = 'https://beneficiario.example.com/reset-password';
 
 const { buildCurpLookup } = require('../src/services/curpHashService');
+const { encryptString } = require('../src/services/fieldEncryptionService');
 
 const BENEFICIARY_CURP = 'LOMC990505HSPLPM02';
 const ACTIVATION_CURP = 'MELR000202MSPSRD06';
 const BENEFICIARY_CARD = 'TJ-1000';
 const ACTIVATION_CARD = 'TJ-2000';
+
+function buildEncryptedPayload(value) {
+  const encrypted = encryptString(value);
+  return {
+    payload_ciphertext: encrypted?.payload_ciphertext || null,
+    payload_iv: encrypted?.payload_iv || null,
+    payload_tag: encrypted?.payload_tag || null
+  };
+}
 
 const catalogItems = [
   {
@@ -32,6 +42,10 @@ const catalogItems = [
 const baseState = () => {
   const beneficiaryLookup = buildCurpLookup(BENEFICIARY_CURP);
   const activationLookup = buildCurpLookup(ACTIVATION_CURP);
+  const beneficiaryNombre = buildEncryptedPayload('Carlos');
+  const beneficiaryApellido = buildEncryptedPayload('Lopez Mendez');
+  const activationNombre = buildEncryptedPayload('Mariana');
+  const activationApellido = buildEncryptedPayload('Estrada Ruiz');
   return {
     users: [
       {
@@ -82,7 +96,14 @@ const baseState = () => {
         status: 'active',
         account_user_id: 1,
         activation_verified_until: null,
-        auth0_user_id: null
+        auth0_user_id: null,
+        nombres_ciphertext: beneficiaryNombre.payload_ciphertext,
+        nombres_iv: beneficiaryNombre.payload_iv,
+        nombres_tag: beneficiaryNombre.payload_tag,
+        apellido_ciphertext: beneficiaryApellido.payload_ciphertext,
+        apellido_iv: beneficiaryApellido.payload_iv,
+        apellido_tag: beneficiaryApellido.payload_tag,
+        municipio_id: 1
       },
       {
         id: 2,
@@ -92,7 +113,14 @@ const baseState = () => {
         status: 'active',
         account_user_id: null,
         activation_verified_until: null,
-        auth0_user_id: null
+        auth0_user_id: null,
+        nombres_ciphertext: activationNombre.payload_ciphertext,
+        nombres_iv: activationNombre.payload_iv,
+        nombres_tag: activationNombre.payload_tag,
+        apellido_ciphertext: activationApellido.payload_ciphertext,
+        apellido_iv: activationApellido.payload_iv,
+        apellido_tag: activationApellido.payload_tag,
+        municipio_id: 2
       }
     ],
     refreshTokens: [],
@@ -129,7 +157,14 @@ function buildSessionRow(user) {
     status: user.status,
     session_version: user.session_version,
     cardholder_sync_id: user.cardholder_sync_id,
-    tarjeta_numero: cardholder?.tarjeta_numero || null
+    tarjeta_numero: cardholder?.tarjeta_numero || null,
+    nombres_ciphertext: cardholder?.nombres_ciphertext || null,
+    nombres_iv: cardholder?.nombres_iv || null,
+    nombres_tag: cardholder?.nombres_tag || null,
+    apellido_ciphertext: cardholder?.apellido_ciphertext || null,
+    apellido_iv: cardholder?.apellido_iv || null,
+    apellido_tag: cardholder?.apellido_tag || null,
+    municipio_id: cardholder?.municipio_id || null
   };
 }
 
@@ -224,7 +259,14 @@ function mockExecuteSql(sql, params = []) {
       status: sessionRow.status,
       session_version: sessionRow.session_version,
       cardholder_sync_id: sessionRow.cardholder_sync_id,
-      tarjeta_numero: sessionRow.tarjeta_numero
+      tarjeta_numero: sessionRow.tarjeta_numero,
+      nombres_ciphertext: sessionRow.nombres_ciphertext,
+      nombres_iv: sessionRow.nombres_iv,
+      nombres_tag: sessionRow.nombres_tag,
+      apellido_ciphertext: sessionRow.apellido_ciphertext,
+      apellido_iv: sessionRow.apellido_iv,
+      apellido_tag: sessionRow.apellido_tag,
+      municipio_id: sessionRow.municipio_id
     }], []];
   }
 
@@ -280,7 +322,14 @@ function mockExecuteSql(sql, params = []) {
       id: cardholder.id,
       status: cardholder.status,
       account_user_id: cardholder.account_user_id,
-      activation_verified_until: cardholder.activation_verified_until
+      activation_verified_until: cardholder.activation_verified_until,
+      nombres_ciphertext: cardholder.nombres_ciphertext,
+      nombres_iv: cardholder.nombres_iv,
+      nombres_tag: cardholder.nombres_tag,
+      apellido_ciphertext: cardholder.apellido_ciphertext,
+      apellido_iv: cardholder.apellido_iv,
+      apellido_tag: cardholder.apellido_tag,
+      municipio_id: cardholder.municipio_id
     }] : [], []];
   }
 
@@ -322,11 +371,14 @@ function mockExecuteSql(sql, params = []) {
   }
 
   if (sql.includes('UPDATE usuarios') && sql.includes("role = 'beneficiary'")) {
-    const user = findUserById(params[3]);
+    const user = findUserById(params[6]);
     if (user) {
-      user.email = params[0];
-      user.password_hash = params[1];
-      user.cardholder_sync_id = params[2];
+      user.nombre = params[0] || user.nombre;
+      user.apellidos = params[1] || user.apellidos;
+      user.email = params[2];
+      user.municipio_id = params[3] || user.municipio_id;
+      user.password_hash = params[4];
+      user.cardholder_sync_id = params[5];
       user.role = 'beneficiary';
       user.status = 'active';
       user.session_version += 1;
@@ -337,17 +389,17 @@ function mockExecuteSql(sql, params = []) {
   if (sql.includes('INSERT INTO usuarios') && sql.includes("'beneficiary'")) {
     const user = {
       id: state.nextUserId++,
-      nombre: null,
-      apellidos: null,
-      email: params[0],
+      nombre: params[0],
+      apellidos: params[1],
+      email: params[2],
       telefono: null,
-      municipio_id: null,
+      municipio_id: params[3],
       municipio: null,
-      password_hash: params[1],
+      password_hash: params[4],
       role: 'beneficiary',
       status: 'active',
       session_version: 0,
-      cardholder_sync_id: params[2],
+      cardholder_sync_id: params[5],
       creditos: 0,
       foto_url: null,
       portada_url: null,
@@ -504,6 +556,37 @@ describe('beneficiary local auth flow', () => {
     });
     expect(complete.headers['set-cookie'][0]).toContain('tj_refresh_token=');
     expect(findCardholderByTarjeta(ACTIVATION_CARD).account_user_id).toBe(3);
+    expect(findUserById(3)).toMatchObject({
+      nombre: 'Mariana',
+      apellidos: 'Estrada Ruiz',
+      municipio_id: 2
+    });
+  });
+
+  test('login y refresh usan fallback desde cardholders_sync si nombre y apellidos del usuario estan vacios', async () => {
+    const beneficiary = findUserById(1);
+    beneficiary.nombre = null;
+    beneficiary.apellidos = null;
+
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ username: 'beneficiary@example.com', password: 'LegacyPassword1!' });
+
+    expect(login.statusCode).toBe(200);
+    expect(login.body.user).toMatchObject({
+      email: 'beneficiary@example.com',
+      nombreCompleto: 'Carlos Lopez Mendez'
+    });
+
+    const refresh = await request(app)
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', login.headers['set-cookie'][0]);
+
+    expect(refresh.statusCode).toBe(200);
+    expect(refresh.body.user).toMatchObject({
+      email: 'beneficiary@example.com',
+      nombreCompleto: 'Carlos Lopez Mendez'
+    });
   });
 
   test('refresh rota cookie y el reuse invalida sesiones previas', async () => {

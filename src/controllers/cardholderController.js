@@ -1,6 +1,6 @@
 const db = require('../config/db');
 const { buildCurpLookup } = require('../services/curpHashService');
-const { encryptString } = require('../services/fieldEncryptionService');
+const { encryptString, decryptString } = require('../services/fieldEncryptionService');
 const {
   hashPassword,
   validatePassword
@@ -101,6 +101,19 @@ function buildSyncResult(index, status, extra = {}) {
     status,
     ...extra
   };
+}
+
+function decryptCardholderString(cardholder, fields, label) {
+  try {
+    return decryptString({
+      payload_ciphertext: cardholder?.[fields.ciphertext],
+      payload_iv: cardholder?.[fields.iv],
+      payload_tag: cardholder?.[fields.tag]
+    });
+  } catch (error) {
+    safeLogger.error(`Error al descifrar ${label} de cardholder_sync durante activacion local`, error);
+    return null;
+  }
 }
 
 function resolveSyncStatus({ processed, accepted, skipped, conflict, rejected }) {
@@ -455,7 +468,10 @@ exports.completeActivation = async (req, res) => {
     await connection.beginTransaction();
 
     const [cardholders] = await connection.execute(
-      `SELECT id, status, account_user_id, activation_verified_until
+      `SELECT id, status, account_user_id, activation_verified_until,
+              nombres_ciphertext, nombres_iv, nombres_tag,
+              apellido_ciphertext, apellido_iv, apellido_tag,
+              municipio_id
        FROM cardholders_sync
        WHERE tarjeta_numero = ?
        LIMIT 1
@@ -478,16 +494,36 @@ exports.completeActivation = async (req, res) => {
       });
     }
 
-    const cardholderSyncId = cardholders[0].id;
+    const cardholder = cardholders[0];
+    const cardholderSyncId = cardholder.id;
+    const nombreDesdeSync = decryptCardholderString(
+      cardholder,
+      {
+        ciphertext: 'nombres_ciphertext',
+        iv: 'nombres_iv',
+        tag: 'nombres_tag'
+      },
+      'nombres'
+    );
+    const apellidosDesdeSync = decryptCardholderString(
+      cardholder,
+      {
+        ciphertext: 'apellido_ciphertext',
+        iv: 'apellido_iv',
+        tag: 'apellido_tag'
+      },
+      'apellidos'
+    );
+    const municipioIdDesdeSync = cardholder.municipio_id || null;
     let linkedUser = null;
-    if (cardholders[0].account_user_id) {
+    if (cardholder.account_user_id) {
       const [linkedUsers] = await connection.execute(
         `SELECT id, email, role, status, cardholder_sync_id, password_hash
          FROM usuarios
          WHERE id = ?
          LIMIT 1
          FOR UPDATE`,
-        [cardholders[0].account_user_id]
+        [cardholder.account_user_id]
       );
       linkedUser = linkedUsers[0] || null;
       if (linkedUser?.cardholder_sync_id && linkedUser.cardholder_sync_id !== cardholderSyncId) {
@@ -544,18 +580,36 @@ exports.completeActivation = async (req, res) => {
       userId = targetUser.id;
       await connection.execute(
         `UPDATE usuarios
-         SET email = ?, password_hash = ?, cardholder_sync_id = ?, role = 'beneficiary',
+         SET nombre = COALESCE(?, nombre),
+             apellidos = COALESCE(?, apellidos),
+             email = ?, municipio_id = COALESCE(?, municipio_id),
+             password_hash = ?, cardholder_sync_id = ?, role = 'beneficiary',
              status = 'active', auth0_user_id = NULL, session_version = session_version + 1
          WHERE id = ?`,
-        [email, passwordHash, cardholderSyncId, userId]
+        [
+          nombreDesdeSync,
+          apellidosDesdeSync,
+          email,
+          municipioIdDesdeSync,
+          passwordHash,
+          cardholderSyncId,
+          userId
+        ]
       );
     } else {
       const [insertResult] = await connection.execute(
         `INSERT INTO usuarios
           (nombre, apellidos, curp, email, telefono, municipio_id, password_hash, role,
            cardholder_sync_id, status)
-         VALUES (NULL, NULL, NULL, ?, NULL, NULL, ?, 'beneficiary', ?, 'active')`,
-        [email, passwordHash, cardholderSyncId]
+         VALUES (?, ?, NULL, ?, NULL, ?, ?, 'beneficiary', ?, 'active')`,
+        [
+          nombreDesdeSync,
+          apellidosDesdeSync,
+          email,
+          municipioIdDesdeSync,
+          passwordHash,
+          cardholderSyncId
+        ]
       );
       userId = insertResult.insertId;
     }
