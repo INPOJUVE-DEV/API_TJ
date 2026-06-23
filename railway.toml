@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 preDeployCommand = "npm run railway:predeploy"
-startCommand = "npm start"
+startCommand = 'mkdir -p /app/secrets && printf "%b" "$API_TJ_PRIVATE_KEY_PEM" > /app/secrets/api_tj_private.pem && npm start'
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
